@@ -757,6 +757,7 @@
             setTimeout(forceFrenchAudio, 1000);
             // Show hint briefly
             menuHint.classList.add('visible');
+            clearTimeout(hideHintTimer);
             hideHintTimer = setTimeout(() => {
                 menuHint.classList.remove('visible');
             }, 5000);

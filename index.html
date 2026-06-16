@@ -782,19 +782,23 @@
                 if (customData.stream_url) media.contentId = customData.stream_url;
                 if (customData.content_type) media.contentType = customData.content_type;
 
-                if (customData.license_url && customData.drm_token) {
-                    const playbackConfig = (Object.assign(new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig()));
-                    playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
+                const playbackConfig = Object.assign(
+                    new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig());
 
-                    playbackConfig.shakaConfiguration = {
-                        streaming: {
-                            bufferingGoal: 30,
-                            rebufferingGoal: 15,
-                            bufferBehind: 30,
-                            alwaysStreamText: true
-                        },
-                        preferredAudioLanguage: 'fra'
-                    };
+                // Buffer tuning and the French audio preference apply to every
+                // stream, DRM-protected or not.
+                playbackConfig.shakaConfiguration = {
+                    streaming: {
+                        bufferingGoal: 30,
+                        rebufferingGoal: 15,
+                        bufferBehind: 30,
+                        alwaysStreamText: true
+                    },
+                    preferredAudioLanguage: 'fra'
+                };
+
+                if (customData.license_url && customData.drm_token) {
+                    playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
 
                     let licenseUrl = customData.license_url;
                     if (customData.asset_id) {
@@ -825,9 +829,9 @@
                         }
                         return data;
                     };
-
-                    playerManager.setPlaybackConfig(playbackConfig);
                 }
+
+                playerManager.setPlaybackConfig(playbackConfig);
                 return loadRequestData;
             }
         );

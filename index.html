@@ -62,8 +62,8 @@
             opacity: 0.9;
         }
 
-        /* Audio submenu */
-        #audio-submenu {
+        /* Track submenu (audio / subtitles) */
+        #track-submenu {
             position: fixed;
             bottom: 120px;
             left: 50%;
@@ -77,21 +77,21 @@
             transition: all 0.2s ease;
             z-index: 1001;
         }
-        #audio-submenu.visible {
+        #track-submenu.visible {
             opacity: 1;
             pointer-events: auto;
             transform: translateX(-50%) translateY(0);
         }
-        .audio-option {
+        .track-option {
             padding: 12px 20px;
             color: #fff;
             font-family: 'Roboto', sans-serif;
             font-size: 16px;
         }
-        .audio-option.selected {
+        .track-option.selected {
             background: rgba(229, 9, 20, 0.9);
         }
-        .audio-option.active::after {
+        .track-option.active::after {
             content: ' ✓';
             color: #4CAF50;
         }
@@ -200,10 +200,14 @@
             <span class="icon">🔊</span>
             <span class="label">Audio</span>
         </div>
+        <div class="menu-item" data-action="subtitles">
+            <span class="icon">💬</span>
+            <span class="label">Subtitles</span>
+        </div>
     </div>
 
-    <!-- Audio Track Submenu -->
-    <div id="audio-submenu"></div>
+    <!-- Track Submenu (audio / subtitles) -->
+    <div id="track-submenu"></div>
 
     <!-- Menu Hint -->
     <div id="menu-hint">Press ↓ for controls</div>
@@ -228,11 +232,12 @@
 
         // --- Menu State ---
         let menuVisible = false;
-        let audioMenuVisible = false;
+        let trackMenuVisible = false;
+        let trackMenuType = null;        // 'AUDIO' or 'TEXT' while the submenu is open
         let selectedIndex = 0;
-        let audioSelectedIndex = 0;
+        let trackSelectedIndex = 0;
         let menuItems = [];
-        let audioTracks = [];
+        let trackOptions = [];           // [{ trackId, label }] for the open submenu
         let hideHintTimer = null;
         let hideMenuTimer = null;
 
@@ -256,7 +261,7 @@
 
         // --- DOM Elements ---
         const controlMenu = document.getElementById('control-menu');
-        const audioSubmenu = document.getElementById('audio-submenu');
+        const trackSubmenu = document.getElementById('track-submenu');
         const menuHint = document.getElementById('menu-hint');
         const seekPreview = document.getElementById('seek-preview');
         const seekPreviewTime = document.getElementById('seek-preview-time');
@@ -294,9 +299,9 @@
 
         function hideMenu() {
             menuVisible = false;
-            audioMenuVisible = false;
+            trackMenuVisible = false;
             controlMenu.classList.remove('visible');
-            audioSubmenu.classList.remove('visible');
+            trackSubmenu.classList.remove('visible');
             clearTimeout(hideMenuTimer);
         }
 
@@ -311,7 +316,7 @@
         function resetHideMenuTimer() {
             clearTimeout(hideMenuTimer);
             hideMenuTimer = setTimeout(() => {
-                if (menuVisible && !audioMenuVisible) {
+                if (menuVisible && !trackMenuVisible) {
                     hideMenu();
                 }
             }, 5000);
@@ -338,8 +343,8 @@
             if (!menuVisible) return;
             resetHideMenuTimer();
 
-            if (audioMenuVisible) {
-                selectAudioTrack();
+            if (trackMenuVisible) {
+                selectTrack();
                 return;
             }
 
@@ -362,7 +367,10 @@
                     clampedSeek(0);
                     break;
                 case 'audio':
-                    showAudioMenu();
+                    showTrackMenu('AUDIO');
+                    return; // Don't hide menu
+                case 'subtitles':
+                    if (!showTrackMenu('TEXT')) showNotice('No subtitles available');
                     return; // Don't hide menu
             }
 
@@ -458,7 +466,7 @@
         // Accumulate a relative seek and arm the debounce timer. Repeated key
         // presses build up a single target so the stream is only seeked once.
         function stepSeek(deltaSec) {
-            if (menuVisible || audioMenuVisible) return;
+            if (menuVisible || trackMenuVisible) return;
 
             const bounds = getSeekBounds();
             if (!bounds) return;
@@ -535,79 +543,97 @@
             playerManager.setActiveTrackIds(kept);
         }
 
-        // --- Audio Track Menu ---
-        function showAudioMenu() {
-            const tracks = playerManager.getTracks();
-            if (!tracks) return;
+        // --- Track Submenu (audio / subtitles) ---
+        const LANG_NAMES = {
+            'fr': 'Français', 'fra': 'Français', 'fre': 'Français',
+            'en': 'English', 'eng': 'English',
+            'de': 'Deutsch', 'deu': 'Deutsch', 'ger': 'Deutsch',
+            'es': 'Español', 'spa': 'Español',
+            'it': 'Italiano', 'ita': 'Italiano',
+            'qaa': 'Original'
+        };
 
-            audioTracks = tracks.filter(t => t.type === 'AUDIO');
-            if (audioTracks.length === 0) return;
+        function trackLabel(track, index) {
+            if (track.language) {
+                return LANG_NAMES[track.language] || track.language.toUpperCase();
+            }
+            return track.name || 'Track ' + (index + 1);
+        }
+
+        // Open the submenu for the given track type ('AUDIO' or 'TEXT'). Text
+        // tracks also get an "Off" entry. Returns false without opening when
+        // there is no track of that type to choose from.
+        function showTrackMenu(type) {
+            const tracks = playerManager.getTracks();
+            const typeTracks = tracks ? tracks.filter(t => t.type === type) : [];
+            if (typeTracks.length === 0) return false;
 
             const stats = playerManager.getStats();
-            const activeIds = stats ? stats.currentTrackIds : [];
+            const activeIds = (stats && stats.currentTrackIds)
+                ? stats.currentTrackIds : [];
 
-            // Build audio menu
-            audioSubmenu.innerHTML = '';
-            audioTracks.forEach((track, index) => {
+            trackMenuType = type;
+            trackSelectedIndex = 0;
+            trackOptions = [];
+            // Subtitles can be turned off; audio always plays one track.
+            if (type === 'TEXT') trackOptions.push({ trackId: null, label: 'Off' });
+            typeTracks.forEach((track, index) => {
+                trackOptions.push({
+                    trackId: track.trackId, label: trackLabel(track, index)
+                });
+            });
+
+            const anyActive = typeTracks.some(t => activeIds.includes(t.trackId));
+            trackSubmenu.innerHTML = '';
+            trackOptions.forEach((option, index) => {
                 const div = document.createElement('div');
-                div.className = 'audio-option';
+                div.className = 'track-option';
+                div.textContent = option.label;
 
-                // Determine label
-                let label = track.name || track.language || 'Track ' + (index + 1);
-                if (track.language) {
-                    const langNames = {
-                        'fr': 'Français', 'fra': 'Français', 'fre': 'Français',
-                        'en': 'English', 'eng': 'English',
-                        'de': 'Deutsch', 'deu': 'Deutsch', 'ger': 'Deutsch',
-                        'es': 'Español', 'spa': 'Español',
-                        'it': 'Italiano', 'ita': 'Italiano',
-                        'qaa': 'Original'
-                    };
-                    label = langNames[track.language] || track.language.toUpperCase();
-                }
-
-                div.textContent = label;
-                div.dataset.trackId = track.trackId;
-
-                if (activeIds && activeIds.includes(track.trackId)) {
+                const isActive = (option.trackId === null)
+                    ? !anyActive
+                    : activeIds.includes(option.trackId);
+                if (isActive) {
                     div.classList.add('active');
-                    audioSelectedIndex = index;
+                    trackSelectedIndex = index;
                 }
 
-                audioSubmenu.appendChild(div);
+                trackSubmenu.appendChild(div);
             });
 
-            audioMenuVisible = true;
-            audioSubmenu.classList.add('visible');
-            updateAudioSelection();
+            trackMenuVisible = true;
+            trackSubmenu.classList.add('visible');
+            updateTrackSelection();
+            return true;
         }
 
-        function hideAudioMenu() {
-            audioMenuVisible = false;
-            audioSubmenu.classList.remove('visible');
+        function hideTrackMenu() {
+            trackMenuVisible = false;
+            trackSubmenu.classList.remove('visible');
         }
 
-        function navigateAudioMenu(direction) {
-            audioSelectedIndex += direction;
-            if (audioSelectedIndex < 0) audioSelectedIndex = audioTracks.length - 1;
-            if (audioSelectedIndex >= audioTracks.length) audioSelectedIndex = 0;
-            updateAudioSelection();
+        function navigateTrackMenu(direction) {
+            trackSelectedIndex += direction;
+            if (trackSelectedIndex < 0) trackSelectedIndex = trackOptions.length - 1;
+            if (trackSelectedIndex >= trackOptions.length) trackSelectedIndex = 0;
+            updateTrackSelection();
         }
 
-        function updateAudioSelection() {
-            const options = audioSubmenu.querySelectorAll('.audio-option');
+        function updateTrackSelection() {
+            const options = trackSubmenu.querySelectorAll('.track-option');
             options.forEach((opt, index) => {
-                opt.classList.toggle('selected', index === audioSelectedIndex);
+                opt.classList.toggle('selected', index === trackSelectedIndex);
             });
         }
 
-        function selectAudioTrack() {
-            if (audioTracks[audioSelectedIndex]) {
-                const trackId = audioTracks[audioSelectedIndex].trackId;
-                setActiveTrackOfType('AUDIO', trackId);
-                console.log('[Etincelle] Audio track changed to:', trackId);
+        function selectTrack() {
+            const option = trackOptions[trackSelectedIndex];
+            if (option) {
+                setActiveTrackOfType(trackMenuType, option.trackId);
+                console.log('[Etincelle] ' + trackMenuType
+                    + ' track changed to:', option.trackId);
             }
-            hideAudioMenu();
+            hideTrackMenu();
             setTimeout(hideMenu, 500);
         }
 
@@ -649,15 +675,15 @@
                     if (!menuVisible) {
                         flushPendingSeek();
                         showMenu();
-                    } else if (audioMenuVisible) {
-                        navigateAudioMenu(1);
+                    } else if (trackMenuVisible) {
+                        navigateTrackMenu(1);
                     }
                     event.preventDefault();
                     break;
 
                 case 'up':
-                    if (audioMenuVisible) {
-                        navigateAudioMenu(-1);
+                    if (trackMenuVisible) {
+                        navigateTrackMenu(-1);
                     } else if (menuVisible) {
                         hideMenu();
                     }
@@ -665,7 +691,7 @@
                     break;
 
                 case 'left':
-                    if (menuVisible && !audioMenuVisible) {
+                    if (menuVisible && !trackMenuVisible) {
                         navigateMenu(-1);
                     } else if (!menuVisible) {
                         stepSeek(SEEK_STEP_BACK);
@@ -674,7 +700,7 @@
                     break;
 
                 case 'right':
-                    if (menuVisible && !audioMenuVisible) {
+                    if (menuVisible && !trackMenuVisible) {
                         navigateMenu(1);
                     } else if (!menuVisible) {
                         stepSeek(SEEK_STEP_FWD);
@@ -693,8 +719,8 @@
                     break;
 
                 case 'back':
-                    if (audioMenuVisible) {
-                        hideAudioMenu();
+                    if (trackMenuVisible) {
+                        hideTrackMenu();
                     } else if (menuVisible) {
                         hideMenu();
                     }

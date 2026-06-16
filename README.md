@@ -14,6 +14,8 @@ the native Molotov streamer is unavailable.
 - **DRM** — reads `license_url` + `drm_token` from the cast `customData` and injects
   the `x-dt-auth-token` header on the Widevine license request (DRMtoday).
 - **French audio** — auto-selects the French (VF) track when available.
+- **Audio / subtitle tracks** — pick an audio track, or a subtitle track (or turn
+  subtitles off), from the on-screen menu.
 - **Remote controls** — an on-screen menu and direct D-pad seeking for devices with
   a remote (Chromecast with Google TV, Android TV).
 - **Error notices** — surfaces playback errors briefly on screen instead of failing
@@ -24,7 +26,7 @@ the native Molotov streamer is unavailable.
 | Key | Action |
 |-----|--------|
 | **◄ / ►** | Rewind 10 s / forward 30 s. **Hold to accelerate** — the step grows the longer the button is held (capped); the preview shows the target position and the speed (×N). Repeated presses accumulate and commit as a single seek. On a live channel the seek stays within the available time-shift window. |
-| **▼** | Open the menu (rewind, forward, restart, audio track). |
+| **▼** | Open the menu (rewind, forward, restart, audio track, subtitles). |
 | **▲ / Back** | Close the menu. |
 | **OK** | Open the menu, or confirm the highlighted item. |
 

@@ -328,11 +328,6 @@
             if (!menuVisible) return;
             resetHideMenuTimer();
 
-            if (audioMenuVisible) {
-                navigateAudioMenu(direction);
-                return;
-            }
-
             selectedIndex += direction;
             if (selectedIndex < 0) selectedIndex = menuItems.length - 1;
             if (selectedIndex >= menuItems.length) selectedIndex = 0;

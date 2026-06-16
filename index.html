@@ -761,10 +761,8 @@
             }
 
             // 2. Fallback: If current track is English/Original, look for French
-            let activeLang = 'unknown';
-            audioTracksLocal.forEach(t => {
-                if (activeIds && activeIds.includes(t.trackId)) activeLang = t.language;
-            });
+            const activeTrack = activeIds && audioTracksLocal.find(t => activeIds.includes(t.trackId));
+            const activeLang = activeTrack ? activeTrack.language : 'unknown';
 
             if (activeLang === 'en' || activeLang === 'eng' || activeLang === 'qaa' || activeLang === 'unknown') {
                 const target = audioTracksLocal.find(t =>

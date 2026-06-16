@@ -156,6 +156,29 @@
             background: #e50914;
             transition: width 0.1s linear;
         }
+
+        /* Transient notice (errors, empty track lists) */
+        #notice {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 80%;
+            background: rgba(0,0,0,0.9);
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+            font-size: 18px;
+            text-align: center;
+            padding: 14px 24px;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 2000;
+        }
+        #notice.visible {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -186,6 +209,9 @@
 
     <!-- Menu Hint -->
     <div id="menu-hint">Press ↓ for controls</div>
+
+    <!-- Transient notice -->
+    <div id="notice"></div>
 
     <!-- Seek Preview -->
     <div id="seek-preview">
@@ -240,6 +266,20 @@
         const seekPreviewDelta = document.getElementById('seek-preview-delta');
         const seekPreviewTrack = document.getElementById('seek-preview-track');
         const seekPreviewFill = document.getElementById('seek-preview-fill');
+        const notice = document.getElementById('notice');
+
+        // --- Transient Notice ---
+        // The receiver otherwise fails to a black screen with no indication of
+        // what went wrong, so surface playback errors and similar conditions.
+        let hideNoticeTimer = null;
+        function showNotice(message) {
+            notice.textContent = message;
+            notice.classList.add('visible');
+            clearTimeout(hideNoticeTimer);
+            hideNoticeTimer = setTimeout(() => {
+                notice.classList.remove('visible');
+            }, 6000);
+        }
 
         // --- Initialize Menu Items ---
         function initMenu() {
@@ -733,6 +773,13 @@
         // Handle tracks appearing late
         playerManager.addEventListener(cast.framework.events.EventType.TRACKS_CHANGED, forceFrenchAudio);
 
+        // Surface playback failures instead of dropping to a silent black screen.
+        playerManager.addEventListener(cast.framework.events.EventType.ERROR, event => {
+            const code = event ? event.detailedErrorCode : null;
+            console.error('[Etincelle] Playback error:', code, event);
+            showNotice('Playback error' + (code ? ' (' + code + ')' : ''));
+        });
+
         // --- Message Interceptors ---
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,
@@ -781,7 +828,9 @@
                                 }
                                 return bytes;
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                            console.error('[Etincelle] License response parse failed:', e);
+                        }
                         return data;
                     };
 

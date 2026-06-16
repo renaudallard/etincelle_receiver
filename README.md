@@ -16,6 +16,8 @@ the native Molotov streamer is unavailable.
 - **French audio** — auto-selects the French (VF) track when available.
 - **Remote controls** — an on-screen menu and direct D-pad seeking for devices with
   a remote (Chromecast with Google TV, Android TV).
+- **Error notices** — surfaces playback errors briefly on screen instead of failing
+  silently to a black screen.
 
 ### Remote controls
 

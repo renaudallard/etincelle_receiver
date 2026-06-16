@@ -1,6 +1,7 @@
 # Etincelle Receiver
 
 A custom [Google Cast](https://developers.google.com/cast) **Web Receiver** (CAF) for the
+[etincelle](https://github.com/renaudallard/etincelle) Android client and the
 [Molotov TV Home Assistant integration](https://github.com/renaudallard/homeassistant_molotov_tv).
 
 It plays Molotov / Fubo streams on a Chromecast, handles their Widevine (DRMtoday)
@@ -52,8 +53,14 @@ Set your Application ID in the integration's `custom_components/molotov_tv/const
 CUSTOM_RECEIVER_APP_ID = "XXXXXXXX"  # your Cast Application ID
 ```
 
+## Using it in etincelle (Android)
+
+The [etincelle](https://github.com/renaudallard/etincelle) Android app casts to this receiver from
+the phone by default; its Application ID is set in the app.
+
 ## Related
 
+- etincelle Android client: <https://github.com/renaudallard/etincelle>
 - Home Assistant integration: <https://github.com/renaudallard/homeassistant_molotov_tv>
 
 ## License

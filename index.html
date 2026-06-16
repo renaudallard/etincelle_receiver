@@ -852,6 +852,7 @@
                                 }
                                 return bytes;
                             }
+                            console.warn('[Etincelle] License response has no .license field, passing raw data');
                         } catch (e) {
                             console.error('[Etincelle] License response parse failed:', e);
                         }

@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Molotov Custom Receiver</title>
+    <title>Etincelle Receiver</title>
     <!-- Official Receiver: https://chromecast.cloud-01.molotov.tv/ -->
     <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
     <!-- Cast Debug Logger -->
@@ -555,7 +555,7 @@
             if (audioTracks[audioSelectedIndex]) {
                 const trackId = audioTracks[audioSelectedIndex].trackId;
                 playerManager.setActiveTrackIds([trackId]);
-                console.log('[Molotov] Audio track changed to:', trackId);
+                console.log('[Etincelle] Audio track changed to:', trackId);
             }
             hideAudioMenu();
             setTimeout(hideMenu, 500);
@@ -674,7 +674,7 @@
                 const prefTrack = audioTracksLocal.find(t => t.language === prefLang);
                 if (prefTrack) {
                     if (!activeIds || !activeIds.includes(prefTrack.trackId)) {
-                        console.log("[Molotov] Switching to API preference:", prefLang);
+                        console.log("[Etincelle] Switching to API preference:", prefLang);
                         playerManager.setActiveTrackIds([prefTrack.trackId]);
                     }
                     return;
@@ -697,7 +697,7 @@
                 ) || audioTracksLocal.find(t => t.language !== 'en' && t.language !== 'eng' && t.language !== 'qaa');
 
                 if (target && (!activeIds || !activeIds.includes(target.trackId))) {
-                    console.log("[Molotov] Fallback switch to:", target.language);
+                    console.log("[Etincelle] Fallback switch to:", target.language);
                     playerManager.setActiveTrackIds([target.trackId]);
                 }
             }

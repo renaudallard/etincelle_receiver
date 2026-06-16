@@ -279,6 +279,8 @@
             notice.textContent = message;
             notice.classList.add('visible');
             clearTimeout(hideNoticeTimer);
+            clearTimeout(hideHintTimer);
+            menuHint.classList.remove('visible');
             hideNoticeTimer = setTimeout(() => {
                 notice.classList.remove('visible');
             }, 6000);

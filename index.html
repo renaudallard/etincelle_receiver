@@ -485,6 +485,24 @@
             hideSeekPreview();
         }
 
+        // Replace the active track of `type` with `trackId` (null to disable
+        // it), keeping the active tracks of every other type. setActiveTrackIds
+        // takes the complete active set, so the others must be re-listed
+        // explicitly, otherwise switching audio would silently drop an active
+        // subtitle track.
+        function setActiveTrackOfType(type, trackId) {
+            const tracks = playerManager.getTracks() || [];
+            const stats = playerManager.getStats();
+            const activeIds = (stats && stats.currentTrackIds)
+                ? stats.currentTrackIds.slice() : [];
+            const typeIds = new Set(
+                tracks.filter(t => t.type === type).map(t => t.trackId)
+            );
+            const kept = activeIds.filter(id => !typeIds.has(id));
+            if (trackId !== null && trackId !== undefined) kept.push(trackId);
+            playerManager.setActiveTrackIds(kept);
+        }
+
         // --- Audio Track Menu ---
         function showAudioMenu() {
             const tracks = playerManager.getTracks();
@@ -554,7 +572,7 @@
         function selectAudioTrack() {
             if (audioTracks[audioSelectedIndex]) {
                 const trackId = audioTracks[audioSelectedIndex].trackId;
-                playerManager.setActiveTrackIds([trackId]);
+                setActiveTrackOfType('AUDIO', trackId);
                 console.log('[Etincelle] Audio track changed to:', trackId);
             }
             hideAudioMenu();
@@ -675,7 +693,7 @@
                 if (prefTrack) {
                     if (!activeIds || !activeIds.includes(prefTrack.trackId)) {
                         console.log("[Etincelle] Switching to API preference:", prefLang);
-                        playerManager.setActiveTrackIds([prefTrack.trackId]);
+                        setActiveTrackOfType('AUDIO', prefTrack.trackId);
                     }
                     return;
                 }
@@ -698,7 +716,7 @@
 
                 if (target && (!activeIds || !activeIds.includes(target.trackId))) {
                     console.log("[Etincelle] Fallback switch to:", target.language);
-                    playerManager.setActiveTrackIds([target.trackId]);
+                    setActiveTrackOfType('AUDIO', target.trackId);
                 }
             }
         }

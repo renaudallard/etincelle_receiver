@@ -906,6 +906,25 @@
             }
         }, STALL_CHECK_INTERVAL);
 
+        // TEMPORARY DIAGNOSTICS: log what the receiver broadcasts to senders, so
+        // we can see why the phone notification has no seek bar and a wrong
+        // position. Throttled to once every 5s. Remove once the cause is found.
+        let lastDiagLog = 0;
+        playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS, () => {
+            const now = Date.now();
+            if (now - lastDiagLog < 5000) return;
+            lastDiagLog = now;
+            const mediaInfo = playerManager.getMediaInformation();
+            const range = playerManager.getLiveSeekableRange();
+            console.log('[Etincelle][diag]',
+                'streamType=', mediaInfo ? mediaInfo.streamType : null,
+                'mediaInfo.duration=', mediaInfo ? mediaInfo.duration : null,
+                'currentTime=', playerManager.getCurrentTimeSec(),
+                'getDurationSec=', playerManager.getDurationSec(),
+                'liveSeekableRange=', range ? JSON.stringify(range) : null,
+                'state=', playerManager.getPlayerState());
+        });
+
         // Message Interceptors
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,

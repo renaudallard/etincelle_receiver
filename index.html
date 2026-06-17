@@ -854,7 +854,8 @@
                     let licenseUrl = customData.license_url;
                     if (customData.asset_id) {
                         const separator = licenseUrl.includes('?') ? '&' : '?';
-                        licenseUrl += separator + 'assetId=' + customData.asset_id;
+                        licenseUrl += separator + 'assetId='
+                            + encodeURIComponent(customData.asset_id);
                     }
                     playbackConfig.licenseUrl = licenseUrl;
 

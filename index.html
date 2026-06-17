@@ -247,6 +247,15 @@
         // first load and not on every channel change.
         let hintShown = false;
 
+        // Self-recovery state. lastLoadRequest is the resolved request cached
+        // from the interceptor so a failed stream can be reloaded by itself.
+        const RECONNECT_BASE_DELAY = 2000;
+        const RECONNECT_MAX_DELAY = 30000;
+        let lastLoadRequest = null;
+        let reconnectAttempts = 0;
+        let reconnectTimer = null;
+        let recovering = false;
+
         // Seek state
         const SEEK_STEP_BACK = -10;
         const SEEK_STEP_FWD = 30;
@@ -799,6 +808,40 @@
             }
         }
 
+        // Reload the last stream after a failure, doubling the delay between
+        // attempts up to a cap so a broken backend is not hammered. It keeps
+        // retrying, so the receiver heals itself once the network or backend
+        // recovers. The recovering guard stops a burst of errors from stacking
+        // several reloads on top of each other.
+        function triggerReconnect() {
+            if (!lastLoadRequest || recovering) return;
+            recovering = true;
+            const delay = Math.min(
+                RECONNECT_MAX_DELAY,
+                RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts)
+            );
+            reconnectAttempts++;
+            showNotice('Connection lost, reconnecting...');
+            reconnectTimer = setTimeout(() => {
+                console.log('[Etincelle] Reconnect attempt', reconnectAttempts);
+                playerManager.load(lastLoadRequest)
+                    .then(() => { recovering = false; })
+                    .catch(e => {
+                        console.error('[Etincelle] Reconnect failed:', e);
+                        recovering = false;
+                        triggerReconnect();
+                    });
+            }, delay);
+        }
+
+        // Playback resumed, so clear the backoff for the next failure.
+        function recoveryDone() {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+            reconnectAttempts = 0;
+            recovering = false;
+        }
+
         // Event Listeners
         playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
             forceFrenchAudio();
@@ -816,12 +859,17 @@
         // Handle tracks appearing late
         playerManager.addEventListener(cast.framework.events.EventType.TRACKS_CHANGED, forceFrenchAudio);
 
-        // Surface playback failures instead of dropping to a silent black screen.
+        // A failure should not leave a black screen. Surface it and reload,
+        // except when the error is just our own reload aborting the old load.
         playerManager.addEventListener(cast.framework.events.EventType.ERROR, event => {
             const code = event ? event.detailedErrorCode : null;
             console.error('[Etincelle] Playback error:', code, event);
-            showNotice('Playback error' + (code ? ' (' + code + ')' : ''));
+            if (code === cast.framework.events.DetailedErrorCode.LOAD_INTERRUPTED) return;
+            triggerReconnect();
         });
+
+        // Clear the backoff once playback is actually running again.
+        playerManager.addEventListener(cast.framework.events.EventType.PLAYING, recoveryDone);
 
         // Message Interceptors
         playerManager.setMessageInterceptor(
@@ -903,6 +951,8 @@
                 }
 
                 playerManager.setPlaybackConfig(playbackConfig);
+                // Cache the resolved request so a later failure can reload it.
+                lastLoadRequest = loadRequestData;
                 return loadRequestData;
             }
         );

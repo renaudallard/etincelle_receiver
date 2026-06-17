@@ -20,6 +20,9 @@ the native Molotov streamer is unavailable.
   a remote (Chromecast with Google TV, Android TV).
 - **Error notices** — surfaces playback errors briefly on screen instead of failing
   silently to a black screen.
+- **Self-recovery** — automatically reloads the stream after a playback failure,
+  backing off between attempts, so a transient network or backend glitch heals
+  itself without intervention.
 
 ### Remote controls
 

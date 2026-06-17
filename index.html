@@ -241,6 +241,8 @@
         let trackOptions = [];           // [{ trackId, label }] for the open submenu
         let hideHintTimer = null;
         let hideMenuTimer = null;
+        // Set when the user picks an audio track; stops the auto French override.
+        let userSelectedAudio = false;
 
         // Seek state
         const SEEK_STEP_BACK = -10;
@@ -645,6 +647,7 @@
             const option = trackOptions[trackSelectedIndex];
             if (option) {
                 setActiveTrackOfType(trackMenuType, option.trackId);
+                if (trackMenuType === 'AUDIO') userSelectedAudio = true;
                 console.log('[Etincelle] ' + trackMenuType
                     + ' track changed to:', option.trackId);
             }
@@ -753,6 +756,8 @@
             const activeIds = stats ? stats.currentTrackIds : [];
 
             if (!tracks || tracks.length === 0) return;
+            // Respect a manual audio choice instead of forcing French back on.
+            if (userSelectedAudio) return;
 
             const audioTracksLocal = tracks.filter(t => t.type === 'AUDIO');
 
@@ -819,6 +824,8 @@
                 // A new stream is loading; drop any pending seek so a stale
                 // target cannot seek the incoming stream.
                 cancelPendingSeek();
+                // A fresh stream resets the manual audio choice.
+                userSelectedAudio = false;
 
                 const media = loadRequestData.media;
                 const customData = media.customData || {};

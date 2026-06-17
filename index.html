@@ -372,7 +372,7 @@
                     clampedSeek(0);
                     break;
                 case 'audio':
-                    showTrackMenu('AUDIO');
+                    if (!showTrackMenu('AUDIO')) showNotice('No audio tracks available');
                     return; // Don't hide menu
                 case 'subtitles':
                     if (!showTrackMenu('TEXT')) showNotice('No subtitles available');

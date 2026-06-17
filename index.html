@@ -256,6 +256,14 @@
         let reconnectTimer = null;
         let recovering = false;
 
+        // Stall watchdog: a hung segment download can sit in BUFFERING forever
+        // without firing an error, so reload when the media clock stops
+        // advancing while playback should be progressing.
+        const STALL_CHECK_INTERVAL = 5000;
+        const STALL_TIMEOUT = 15000;
+        let lastProgressTime = 0;
+        let stalledFor = 0;
+
         // Seek state
         const SEEK_STEP_BACK = -10;
         const SEEK_STEP_FWD = 30;
@@ -871,6 +879,33 @@
         // Clear the backoff once playback is actually running again.
         playerManager.addEventListener(cast.framework.events.EventType.PLAYING, recoveryDone);
 
+        // Reload if the media clock freezes while playback should be advancing.
+        setInterval(() => {
+            if (recovering) {
+                stalledFor = 0;
+                return;
+            }
+            const messages = cast.framework.messages;
+            const state = playerManager.getPlayerState();
+            if (state !== messages.PlayerState.PLAYING
+                && state !== messages.PlayerState.BUFFERING) {
+                stalledFor = 0;
+                return;
+            }
+            const t = playerManager.getCurrentTimeSec();
+            if (Number.isFinite(t) && t > lastProgressTime) {
+                lastProgressTime = t;
+                stalledFor = 0;
+                return;
+            }
+            stalledFor += STALL_CHECK_INTERVAL;
+            if (stalledFor >= STALL_TIMEOUT) {
+                console.warn('[Etincelle] Playback stalled; reloading');
+                stalledFor = 0;
+                triggerReconnect();
+            }
+        }, STALL_CHECK_INTERVAL);
+
         // Message Interceptors
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,
@@ -880,6 +915,9 @@
                 cancelPendingSeek();
                 // A fresh stream resets the manual audio choice.
                 userSelectedAudio = false;
+                // Reset the stall watchdog for the new stream.
+                lastProgressTime = 0;
+                stalledFor = 0;
 
                 const media = loadRequestData.media;
                 const customData = media.customData || {};

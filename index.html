@@ -231,7 +231,7 @@
         const context = cast.framework.CastReceiverContext.getInstance();
         const playerManager = context.getPlayerManager();
 
-        // --- Menu State ---
+        // Menu State
         let menuVisible = false;
         let trackMenuVisible = false;
         let trackMenuType = null;        // 'AUDIO' or 'TEXT' while the submenu is open
@@ -265,7 +265,7 @@
         let seekDir = 0;
         let lastSeekAt = 0;
 
-        // --- DOM Elements ---
+        // DOM Elements
         const controlMenu = document.getElementById('control-menu');
         const trackSubmenu = document.getElementById('track-submenu');
         const menuHint = document.getElementById('menu-hint');
@@ -276,7 +276,7 @@
         const seekPreviewFill = document.getElementById('seek-preview-fill');
         const notice = document.getElementById('notice');
 
-        // --- Transient Notice ---
+        // Transient Notice
         // The receiver otherwise fails to a black screen with no indication of
         // what went wrong, so surface playback errors and similar conditions.
         let hideNoticeTimer = null;
@@ -291,13 +291,13 @@
             }, 6000);
         }
 
-        // --- Initialize Menu Items ---
+        // Initialize Menu Items
         function initMenu() {
             menuItems = document.querySelectorAll('.menu-item');
             updateMenuSelection();
         }
 
-        // --- Menu Visibility ---
+        // Menu Visibility
         function showMenu() {
             menuVisible = true;
             controlMenu.classList.add('visible');
@@ -330,7 +330,7 @@
             }, 5000);
         }
 
-        // --- Menu Navigation ---
+        // Menu Navigation
         function updateMenuSelection() {
             menuItems.forEach((item, index) => {
                 item.classList.toggle('selected', index === selectedIndex);
@@ -360,7 +360,7 @@
             executeAction(action);
         }
 
-        // --- Actions ---
+        // Actions
         function executeAction(action) {
             const currentTime = playerManager.getCurrentTimeSec();
 
@@ -386,7 +386,7 @@
             setTimeout(hideMenu, 500);
         }
 
-        // --- Seek Controls ---
+        // Seek Controls
         // Returns the seekable bounds {min, max} for the current media, or null
         // when nothing is loaded or a live stream exposes no timeshift window.
         // max is null when the upper bound is unknown (VOD without a duration).
@@ -563,7 +563,7 @@
             playerManager.setActiveTrackIds(kept);
         }
 
-        // --- Track Submenu (audio / subtitles) ---
+        // Track Submenu (audio / subtitles)
         const LANG_NAMES = {
             'fr': 'Français', 'fra': 'Français', 'fre': 'Français',
             'en': 'English', 'eng': 'English',
@@ -658,7 +658,7 @@
             setTimeout(hideMenu, 500);
         }
 
-        // --- Key Event Handling ---
+        // Key Event Handling
         // Cast remotes dispatch KeyboardEvent.key ('ArrowLeft', 'BrowserBack',
         // ...); older webviews only populate the legacy keyCode. Accept both.
         function normalizeKey(event) {
@@ -752,7 +752,7 @@
 
         document.addEventListener('keydown', handleKeyDown);
 
-        // --- Track Selection Logic ---
+        // Track Selection Logic
         function forceFrenchAudio() {
             const tracks = playerManager.getTracks();
             const stats = playerManager.getStats();
@@ -799,7 +799,7 @@
             }
         }
 
-        // --- Event Listeners ---
+        // Event Listeners
         playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
             forceFrenchAudio();
             // Show the hint briefly, but only on the first load of the session.
@@ -823,7 +823,7 @@
             showNotice('Playback error' + (code ? ' (' + code + ')' : ''));
         });
 
-        // --- Message Interceptors ---
+        // Message Interceptors
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,
             loadRequestData => {
@@ -895,10 +895,10 @@
             }
         );
 
-        // --- Initialize ---
+        // Initialize
         initMenu();
 
-        // --- Start Receiver ---
+        // Start Receiver
         const options = new cast.framework.CastReceiverOptions();
         options.supportedCommands = cast.framework.messages.Command.ALL_BASIC_COMMANDS |
                                     cast.framework.messages.Command.EDIT_TRACKS |

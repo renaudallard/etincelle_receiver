@@ -528,6 +528,18 @@
             hideSeekPreview();
         }
 
+        // Discard any pending seek without committing it, used when the media is
+        // replaced so a stale target cannot seek the new stream.
+        function cancelPendingSeek() {
+            clearTimeout(seekCommitTimer);
+            seekCommitTimer = null;
+            clearTimeout(hideSeekPreviewTimer);
+            seekRepeat = 0;
+            seekDir = 0;
+            pendingSeekTime = null;
+            hideSeekPreview();
+        }
+
         // Replace the active track of `type` with `trackId` (null to disable
         // it), keeping the active tracks of every other type. setActiveTrackIds
         // takes the complete active set, so the others must be re-listed
@@ -804,6 +816,10 @@
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,
             loadRequestData => {
+                // A new stream is loading; drop any pending seek so a stale
+                // target cannot seek the incoming stream.
+                cancelPendingSeek();
+
                 const media = loadRequestData.media;
                 const customData = media.customData || {};
 

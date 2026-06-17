@@ -843,14 +843,26 @@
                     new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig());
 
                 // Buffer tuning and the French audio preference apply to every
-                // stream, DRM-protected or not.
-                playbackConfig.shakaConfiguration = {
+                // stream, DRM-protected or not. The CAF property is shakaConfig;
+                // retryParameters let transient network failures recover on
+                // their own before they ever become fatal.
+                const retryParameters = {
+                    maxAttempts: 6,
+                    baseDelay: 1000,
+                    backoffFactor: 2,
+                    timeout: 30000
+                };
+                playbackConfig.segmentRequestRetryLimit = 5;
+                playbackConfig.shakaConfig = {
                     streaming: {
                         bufferingGoal: 30,
                         rebufferingGoal: 15,
                         bufferBehind: 30,
-                        alwaysStreamText: true
+                        alwaysStreamText: true,
+                        retryParameters
                     },
+                    manifest: { retryParameters },
+                    drm: { retryParameters },
                     preferredAudioLanguage: 'fra'
                 };
 

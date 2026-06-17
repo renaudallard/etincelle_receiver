@@ -573,22 +573,51 @@
             hideSeekPreview();
         }
 
-        // Replace the active track of `type` with `trackId` (null to disable
-        // it), keeping the active tracks of every other type. setActiveTrackIds
-        // takes the complete active set, so the others must be re-listed
-        // explicitly, otherwise switching audio would silently drop an active
-        // subtitle track.
+        // Audio and subtitles are handled by separate CAF track managers: the
+        // audio manager exposes a single active track, the text manager a set.
+        // These helpers present both through a common shape so the menu code
+        // stays uniform.
+        function tracksManagerOfType(type) {
+            return type === 'AUDIO'
+                ? playerManager.getAudioTracksManager()
+                : playerManager.getTextTracksManager();
+        }
+
+        // Tracks of `type` ('AUDIO' or 'TEXT'), or [] when none are loaded yet.
+        // The managers throw if queried before media is ready, hence the guard.
+        function tracksOfType(type) {
+            try {
+                return tracksManagerOfType(type).getTracks() || [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // Active track ids for `type`, always an array (audio has at most one).
+        function activeTrackIdsOfType(type) {
+            try {
+                if (type === 'AUDIO') {
+                    const id = playerManager.getAudioTracksManager().getActiveId();
+                    return (id === null || id === undefined) ? [] : [id];
+                }
+                return playerManager.getTextTracksManager().getActiveIds() || [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // Make `trackId` the active track of `type` (null to turn subtitles
+        // off). The two managers are independent, so changing the audio track
+        // never disturbs the active subtitle track or vice versa.
         function setActiveTrackOfType(type, trackId) {
-            const tracks = playerManager.getTracks() || [];
-            const stats = playerManager.getStats();
-            const activeIds = (stats && stats.currentTrackIds)
-                ? stats.currentTrackIds.slice() : [];
-            const typeIds = new Set(
-                tracks.filter(t => t.type === type).map(t => t.trackId)
-            );
-            const kept = activeIds.filter(id => !typeIds.has(id));
-            if (trackId !== null && trackId !== undefined) kept.push(trackId);
-            playerManager.setActiveTrackIds(kept);
+            if (type === 'AUDIO') {
+                if (trackId === null || trackId === undefined) return;
+                playerManager.getAudioTracksManager().setActiveById(trackId);
+            } else {
+                const ids = (trackId === null || trackId === undefined)
+                    ? [] : [trackId];
+                playerManager.getTextTracksManager().setActiveByIds(ids);
+            }
         }
 
         // Track Submenu (audio / subtitles)
@@ -612,13 +641,10 @@
         // tracks also get an "Off" entry. Returns false without opening when
         // there is no track of that type to choose from.
         function showTrackMenu(type) {
-            const tracks = playerManager.getTracks();
-            const typeTracks = tracks ? tracks.filter(t => t.type === type) : [];
+            const typeTracks = tracksOfType(type);
             if (typeTracks.length === 0) return false;
 
-            const stats = playerManager.getStats();
-            const activeIds = (stats && stats.currentTrackIds)
-                ? stats.currentTrackIds : [];
+            const activeIds = activeTrackIdsOfType(type);
 
             trackMenuType = type;
             trackSelectedIndex = 0;
@@ -782,15 +808,12 @@
 
         // Track Selection Logic
         function forceFrenchAudio() {
-            const tracks = playerManager.getTracks();
-            const stats = playerManager.getStats();
-            const activeIds = stats ? stats.currentTrackIds : [];
-
-            if (!tracks || tracks.length === 0) return;
             // Respect a manual audio choice instead of forcing French back on.
             if (userSelectedAudio) return;
 
-            const audioTracksLocal = tracks.filter(t => t.type === 'AUDIO');
+            const audioTracksLocal = tracksOfType('AUDIO');
+            if (audioTracksLocal.length === 0) return;
+            const activeIds = activeTrackIdsOfType('AUDIO');
 
             // 1. Check for explicit preference from Molotov API (passed via customData)
             const mediaInfo = playerManager.getMediaInformation();
@@ -800,7 +823,7 @@
                 const prefLang = customData.selected_track.track_audio;
                 const prefTrack = audioTracksLocal.find(t => t.language === prefLang);
                 if (prefTrack) {
-                    if (!activeIds || !activeIds.includes(prefTrack.trackId)) {
+                    if (!activeIds.includes(prefTrack.trackId)) {
                         console.log("[Etincelle] Switching to API preference:", prefLang);
                         setActiveTrackOfType('AUDIO', prefTrack.trackId);
                     }
@@ -809,7 +832,7 @@
             }
 
             // 2. Fallback: If current track is English/Original, look for French
-            const activeTrack = activeIds && audioTracksLocal.find(t => activeIds.includes(t.trackId));
+            const activeTrack = audioTracksLocal.find(t => activeIds.includes(t.trackId));
             const activeLang = activeTrack ? activeTrack.language : 'unknown';
 
             if (activeLang === 'en' || activeLang === 'eng' || activeLang === 'qaa' || activeLang === 'unknown') {
@@ -820,7 +843,7 @@
                     (t.name && t.name.toLowerCase().includes('franç'))
                 ) || audioTracksLocal.find(t => t.language !== 'en' && t.language !== 'eng' && t.language !== 'qaa');
 
-                if (target && (!activeIds || !activeIds.includes(target.trackId))) {
+                if (target && !activeIds.includes(target.trackId)) {
                     console.log("[Etincelle] Fallback switch to:", target.language);
                     setActiveTrackOfType('AUDIO', target.trackId);
                 }

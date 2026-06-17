@@ -264,6 +264,17 @@
         let lastProgressTime = 0;
         let stalledFor = 0;
 
+        // Continue-watching: the receiver POSTs the playback position to the Fubo playhead while
+        // casting, because the phone is not reliably present during a cast session. All of these are
+        // populated from the LOAD customData; they stay null (no reporting) when it is absent.
+        const PLAYHEAD_INTERVAL = 10000;
+        let playheadUrl = null;
+        let playheadPayload = null;
+        let playheadHeaders = null;
+        let playheadDurationSec = 0;
+        let playheadLastSent = -1;
+        let playheadTimer = null;
+
         // Seek state
         const SEEK_STEP_BACK = -10;
         const SEEK_STEP_FWD = 30;
@@ -850,6 +861,55 @@
             recovering = false;
         }
 
+        // Continue-watching playhead reporting. lastOffset is in seconds; the backend rejects 0 and
+        // there is no point resending the same second. Fire-and-forget; the backend allows CORS for
+        // this origin, so a failed preflight or post must never affect playback.
+        function reportPlayhead(offsetSec) {
+            if (!playheadUrl || !Number.isFinite(offsetSec) || offsetSec <= 0) return;
+            if (offsetSec === playheadLastSent) return;
+            playheadLastSent = offsetSec;
+            const body = Object.assign({}, playheadPayload, { lastOffset: offsetSec });
+            fetch(playheadUrl, { method: 'POST', headers: playheadHeaders, body: JSON.stringify(body) })
+                .catch(e => console.warn('[Etincelle] playhead post failed', e));
+        }
+
+        function stopPlayhead() {
+            if (playheadTimer) {
+                clearInterval(playheadTimer);
+                playheadTimer = null;
+            }
+        }
+
+        // Arm reporting from the LOAD customData. Needs the playhead url, its payload template and an
+        // access token; without any of them it stays disabled (e.g. the Home Assistant integration).
+        function setupPlayhead(customData) {
+            stopPlayhead();
+            playheadUrl = customData.playhead_url || null;
+            playheadPayload = customData.playhead_payload || null;
+            const token = customData.access_token;
+            if (!playheadUrl || !playheadPayload || !token) {
+                playheadUrl = null;
+                return;
+            }
+            playheadHeaders = {
+                'Authorization': 'Bearer ' + token,
+                'Content-Type': 'application/json',
+                'X-Application-Id': 'molotov',
+                'X-Client-Version': '5.51.0',
+                'X-Os': 'android',
+                'X-Preferred-Language': 'fr-FR'
+            };
+            if (customData.profile_id) playheadHeaders['X-Profile-Id'] = customData.profile_id;
+            if (customData.user_id) playheadHeaders['X-User-Id'] = customData.user_id;
+            playheadDurationSec = Math.floor(Number(playheadPayload.duration) || 0);
+            playheadLastSent = -1;
+            playheadTimer = setInterval(() => {
+                if (playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING) {
+                    reportPlayhead(Math.floor(playerManager.getCurrentTimeSec()));
+                }
+            }, PLAYHEAD_INTERVAL);
+        }
+
         // Event Listeners
         playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
             forceFrenchAudio();
@@ -878,6 +938,14 @@
 
         // Clear the backoff once playback is actually running again.
         playerManager.addEventListener(cast.framework.events.EventType.PLAYING, recoveryDone);
+
+        // When the item plays through to the end on the TV, mark it watched on the server.
+        playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, event => {
+            if (event && event.endedReason === cast.framework.events.EndedReason.END_OF_STREAM) {
+                reportPlayhead(playheadDurationSec);
+            }
+            stopPlayhead();
+        });
 
         // Reload if the media clock freezes while playback should be advancing.
         setInterval(() => {
@@ -924,6 +992,9 @@
 
                 if (customData.stream_url) media.contentId = customData.stream_url;
                 if (customData.content_type) media.contentType = customData.content_type;
+
+                // Drive continue-watching from the receiver (the phone may be away while casting).
+                setupPlayhead(customData);
 
                 const playbackConfig = Object.assign(
                     new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig());

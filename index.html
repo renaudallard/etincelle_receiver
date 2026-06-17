@@ -860,6 +860,19 @@
         function triggerReconnect() {
             if (!lastLoadRequest || recovering) return;
             recovering = true;
+
+            // Resume VOD where playback was instead of restarting from the
+            // original offset cached at load time. Live reloads at the edge, so
+            // leave its start time untouched.
+            const mediaInfo = playerManager.getMediaInformation();
+            if (mediaInfo && mediaInfo.streamType
+                    !== cast.framework.messages.StreamType.LIVE) {
+                const pos = playerManager.getCurrentTimeSec();
+                if (Number.isFinite(pos) && pos > 0) {
+                    lastLoadRequest.currentTime = pos;
+                }
+            }
+
             const delay = Math.min(
                 RECONNECT_MAX_DELAY,
                 RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts)

@@ -261,7 +261,9 @@
         // advancing while playback should be progressing.
         const STALL_CHECK_INTERVAL = 5000;
         const STALL_TIMEOUT = 15000;
-        let lastProgressTime = 0;
+        // -1 is a value the media clock never reports, so the first observation
+        // always re-baselines instead of looking like a stall.
+        let lastMediaTime = -1;
         let stalledFor = 0;
 
         // Continue-watching: the receiver POSTs the playback position to the Fubo playhead while
@@ -984,8 +986,11 @@
                 return;
             }
             const t = playerManager.getCurrentTimeSec();
-            if (Number.isFinite(t) && t > lastProgressTime) {
-                lastProgressTime = t;
+            // Any change in the media clock, forward or a backward seek, means
+            // playback is not frozen. Only an unchanged clock is a real stall;
+            // tracking the max instead would count a rewind as a stall.
+            if (Number.isFinite(t) && t !== lastMediaTime) {
+                lastMediaTime = t;
                 stalledFor = 0;
                 return;
             }
@@ -1007,7 +1012,7 @@
                 // A fresh stream resets the manual audio choice.
                 userSelectedAudio = false;
                 // Reset the stall watchdog for the new stream.
-                lastProgressTime = 0;
+                lastMediaTime = -1;
                 stalledFor = 0;
 
                 const media = loadRequestData.media;

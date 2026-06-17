@@ -691,6 +691,8 @@
         function hideTrackMenu() {
             trackMenuVisible = false;
             trackSubmenu.classList.remove('visible');
+            // Back on the main menu, so restart its idle auto-hide countdown.
+            resetHideMenuTimer();
         }
 
         function navigateTrackMenu(direction) {

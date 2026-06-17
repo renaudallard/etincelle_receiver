@@ -990,10 +990,21 @@
         // When the item plays through to the end on the TV, mark it watched on the server.
         playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, event => {
             if (event && event.endedReason === cast.framework.events.EndedReason.END_OF_STREAM) {
-                reportPlayhead(playheadDurationSec);
+                // Fall back to the player's duration when the template carried none, and bypass the
+                // de-dup so this terminal "watched" write is never dropped by an identical last tick.
+                const dur = playheadDurationSec > 0 ? playheadDurationSec : Math.floor(playerManager.getDurationSec() || 0);
+                playheadLastSent = -1;
+                reportPlayhead(dur);
             }
-            stopPlayhead();
+            // Do not stop the timer here: it self-gates on PLAYING, so a replay/restart in the same
+            // session resumes reporting without a fresh LOAD. It is cleared on the next LOAD or on
+            // sender disconnect.
         });
+
+        // Stop the playhead timer when the last sender disconnects or the receiver shuts down; the
+        // self-gating interval would otherwise keep ticking until the page is torn down.
+        context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, stopPlayhead);
+        context.addEventListener(cast.framework.system.EventType.SHUTDOWN, stopPlayhead);
 
         // Reload if the media clock freezes while playback should be advancing.
         setInterval(() => {

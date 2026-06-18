@@ -452,6 +452,10 @@
 
         function clampBounds(value, bounds) {
             let t = value;
+            // A non-finite target (e.g. a seek attempted before the media clock is
+            // ready) slips through the comparisons below unclamped, so pin it to the
+            // lower bound rather than forwarding NaN to seek().
+            if (!Number.isFinite(t)) return bounds.min;
             if (t < bounds.min) t = bounds.min;
             if (bounds.max !== null && t > bounds.max) t = bounds.max;
             return t;
@@ -482,7 +486,11 @@
 
         function renderSeekPreview(target, bounds, speed) {
             const current = playerManager.getCurrentTimeSec();
-            let deltaText = formatDelta(Math.round(target - current));
+            // Only show the jump size when the current position is known; a NaN clock
+            // would otherwise render a misleading +0:00 beside a valid target time.
+            let deltaText = Number.isFinite(current)
+                ? formatDelta(Math.round(target - current))
+                : '';
             if (speed && speed >= 2) {
                 deltaText += '  ×' + Math.round(speed);
             }

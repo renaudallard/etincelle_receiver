@@ -649,6 +649,22 @@
             'qaa': 'Original'
         };
 
+        // ISO-639 tags the same language with 2- and 3-letter (and bibliographic vs
+        // terminologic) variants; fold them so an API preference of 'fr' matches a
+        // track tagged 'fra'/'fre' and vice versa.
+        const LANG_ALIASES = {
+            'fr': 'fr', 'fra': 'fr', 'fre': 'fr',
+            'en': 'en', 'eng': 'en',
+            'de': 'de', 'deu': 'de', 'ger': 'de',
+            'es': 'es', 'spa': 'es',
+            'it': 'it', 'ita': 'it'
+        };
+        function canonicalLang(code) {
+            if (!code) return code;
+            const c = code.toLowerCase();
+            return LANG_ALIASES[c] || c;
+        }
+
         function trackLabel(track, index) {
             if (track.language) {
                 return LANG_NAMES[track.language] || track.language.toUpperCase();
@@ -879,7 +895,8 @@
 
             if (customData && customData.selected_track && customData.selected_track.track_audio) {
                 const prefLang = customData.selected_track.track_audio;
-                const prefTrack = audioTracksLocal.find(t => t.language === prefLang);
+                const prefTrack = audioTracksLocal.find(
+                    t => canonicalLang(t.language) === canonicalLang(prefLang));
                 if (prefTrack) {
                     if (!activeIds.includes(prefTrack.trackId)) {
                         console.log("[Etincelle] Switching to API preference:", prefLang);

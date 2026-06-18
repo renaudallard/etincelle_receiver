@@ -1123,6 +1123,14 @@
                         (userSelectedAudio && userAudioLanguage) || 'fra'
                 };
 
+                // Clear any DRM settings carried over from the previous stream, so a
+                // following clear stream is not treated as Widevine with stale
+                // credentials. The block below re-sets them when the stream needs DRM.
+                playbackConfig.protectionSystem = undefined;
+                playbackConfig.licenseUrl = undefined;
+                playbackConfig.licenseRequestHandler = undefined;
+                playbackConfig.licenseHandler = undefined;
+
                 if (customData.license_url && customData.drm_token) {
                     playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
 

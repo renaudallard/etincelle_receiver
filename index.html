@@ -1050,9 +1050,13 @@
             const reason = event && event.endedReason;
             const reasons = cast.framework.events.EndedReason;
             if (reason === reasons.END_OF_STREAM) {
-                // Fall back to the player's duration when the template carried none, and bypass the
-                // de-dup so this terminal "watched" write is never dropped by an identical last tick.
-                const dur = playheadDurationSec > 0 ? playheadDurationSec : Math.floor(playerManager.getDurationSec() || 0);
+                // Prefer the template duration, fall back to the player's duration, then
+                // to the last reported position, so this terminal write still carries a
+                // positive offset when no duration is known. Bypass the de-dup so an
+                // identical last tick cannot drop it.
+                const playerDur = Math.floor(playerManager.getDurationSec() || 0);
+                const dur = playheadDurationSec > 0 ? playheadDurationSec
+                    : (playerDur > 0 ? playerDur : Math.max(0, playheadLastSent));
                 playheadLastSent = -1;
                 reportPlayhead(dur);
             } else if (reason === reasons.STOPPED) {

@@ -1136,6 +1136,9 @@
         playerManager.setMessageInterceptor(
             cast.framework.messages.MessageType.LOAD,
             loadRequestData => {
+                // A malformed LOAD without media would throw below; hand it back
+                // untouched (CAF rejects it) rather than aborting in the interceptor.
+                if (!loadRequestData || !loadRequestData.media) return loadRequestData;
                 // A new stream is loading; drop any pending seek so a stale
                 // target cannot seek the incoming stream.
                 cancelPendingSeek();

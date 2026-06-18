@@ -362,7 +362,9 @@
         function resetHideMenuTimer() {
             clearTimeout(hideMenuTimer);
             hideMenuTimer = setTimeout(() => {
-                if (menuVisible && !trackMenuVisible) {
+                // hideMenu() closes the track submenu too, so an idle timeout
+                // dismisses the whole overlay whether or not the submenu is open.
+                if (menuVisible) {
                     hideMenu();
                 }
             }, 5000);
@@ -698,6 +700,9 @@
             trackMenuVisible = true;
             trackSubmenu.classList.add('visible');
             updateTrackSelection();
+            // Arm the idle auto-hide for the submenu too, so it does not sit on
+            // screen indefinitely when left open.
+            resetHideMenuTimer();
             return true;
         }
 
@@ -709,6 +714,7 @@
         }
 
         function navigateTrackMenu(direction) {
+            resetHideMenuTimer();
             trackSelectedIndex += direction;
             if (trackSelectedIndex < 0) trackSelectedIndex = trackOptions.length - 1;
             if (trackSelectedIndex >= trackOptions.length) trackSelectedIndex = 0;

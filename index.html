@@ -479,7 +479,7 @@
             let deltaText = Number.isFinite(current)
                 ? formatDelta(Math.round(target - current))
                 : '';
-            if (speed && speed >= 2) {
+            if (speed >= 2) {
                 deltaText += '  ×' + Math.round(speed);
             }
             seekPreviewTime.textContent = formatTime(target);

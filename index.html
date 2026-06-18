@@ -261,9 +261,16 @@
         // backoff above this is roughly three and a half minutes, long enough to
         // ride out a transient outage but bounded so a dead session gives up.
         const RECONNECT_MAX_ATTEMPTS = 10;
+        // Bound a reconnect load() that never settles. A wedged Widevine/CDM
+        // session or a stuck media buffer can leave load() pending forever,
+        // outside Shaka's per-request retries; that would pin recovering=true and
+        // silently disable both the error and the stall paths. If a reload neither
+        // succeeds nor fails within this long, treat it as failed and re-arm.
+        const RECONNECT_LOAD_TIMEOUT = 45000;
         let lastLoadRequest = null;
         let reconnectAttempts = 0;
         let reconnectTimer = null;
+        let loadGuardTimer = null;
         let recovering = false;
         // Set when the user stops or exits from the remote (STOP command or back/exit). It keeps the
         // self-reconnect from healing playback back up, so a stop stops instead of restarting. Reset on
@@ -969,22 +976,38 @@
             showNotice('Connection lost, reconnecting...');
             reconnectTimer = setTimeout(() => {
                 console.log('[Etincelle] Reconnect attempt', reconnectAttempts);
-                playerManager.load(lastLoadRequest)
-                    .then(() => { recovering = false; })
-                    .catch(e => {
-                        console.error('[Etincelle] Reconnect failed:', e);
-                        recovering = false;
+                // Fail the attempt if load() never settles, so a hung load cannot
+                // freeze recovery. settled lets the first of {success, failure,
+                // timeout} win and ignores the laggards.
+                let settled = false;
+                const settle = (failed, reason) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(loadGuardTimer);
+                    loadGuardTimer = null;
+                    recovering = false;
+                    if (failed) {
+                        console.error('[Etincelle] Reconnect failed:', reason);
                         triggerReconnect();
-                    });
+                    }
+                };
+                loadGuardTimer = setTimeout(
+                    () => settle(true, 'load timed out'), RECONNECT_LOAD_TIMEOUT);
+                playerManager.load(lastLoadRequest)
+                    .then(() => settle(false))
+                    .catch(e => settle(true, e));
             }, delay);
         }
 
         // Playback resumed, so clear the backoff for the next failure and drop
         // any recovery notice still on screen (including the terminal one, so a
-        // fresh cast that succeeds wipes it).
+        // fresh cast that succeeds wipes it). Also drop a pending load guard so it
+        // cannot fail a reload that has actually succeeded.
         function recoveryDone() {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
+            clearTimeout(loadGuardTimer);
+            loadGuardTimer = null;
             reconnectAttempts = 0;
             recovering = false;
             hideNotice();

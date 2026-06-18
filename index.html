@@ -254,6 +254,13 @@
         // from the interceptor so a failed stream can be reloaded by itself.
         const RECONNECT_BASE_DELAY = 2000;
         const RECONNECT_MAX_DELAY = 30000;
+        // Stop self-reconnecting after this many consecutive failed attempts. A
+        // reload replays the cached stream URL and DRM token, which the backend
+        // issues short-lived; once they expire every retry fails identically, so
+        // looping past this only flashes a notice over a black screen. With the
+        // backoff above this is roughly three and a half minutes, long enough to
+        // ride out a transient outage but bounded so a dead session gives up.
+        const RECONNECT_MAX_ATTEMPTS = 10;
         let lastLoadRequest = null;
         let reconnectAttempts = 0;
         let reconnectTimer = null;
@@ -317,15 +324,23 @@
         // The receiver otherwise fails to a black screen with no indication of
         // what went wrong, so surface playback errors and similar conditions.
         let hideNoticeTimer = null;
-        function showNotice(message) {
+        // A persistent notice (the terminal "cast again" message) stays up until
+        // something replaces or clears it; a transient one auto-hides.
+        function showNotice(message, persistent) {
             notice.textContent = message;
             notice.classList.add('visible');
             clearTimeout(hideNoticeTimer);
             clearTimeout(hideHintTimer);
             menuHint.classList.remove('visible');
+            if (persistent) return;
             hideNoticeTimer = setTimeout(() => {
                 notice.classList.remove('visible');
             }, 6000);
+        }
+
+        function hideNotice() {
+            clearTimeout(hideNoticeTimer);
+            notice.classList.remove('visible');
         }
 
         // Menu Visibility
@@ -919,6 +934,19 @@
         // several reloads on top of each other.
         function triggerReconnect() {
             if (!lastLoadRequest || recovering || userStopped) return;
+
+            // Give up once the cached credentials are clearly dead instead of
+            // looping forever. Recovery resets the counter (recoveryDone), so the
+            // cap only trips after this many failures with no playback in between.
+            // The session can only resume with a fresh cast, which carries new
+            // credentials, so say so rather than hiding a transient notice.
+            if (reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+                console.warn('[Etincelle] Giving up after',
+                    reconnectAttempts, 'reconnect attempts');
+                showNotice('Connection lost. Please cast again.', true);
+                return;
+            }
+
             recovering = true;
 
             // Resume VOD where playback was instead of restarting from the
@@ -951,12 +979,15 @@
             }, delay);
         }
 
-        // Playback resumed, so clear the backoff for the next failure.
+        // Playback resumed, so clear the backoff for the next failure and drop
+        // any recovery notice still on screen (including the terminal one, so a
+        // fresh cast that succeeds wipes it).
         function recoveryDone() {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
             reconnectAttempts = 0;
             recovering = false;
+            hideNotice();
         }
 
         // A user-initiated stop or exit (remote STOP command, or back/exit with no menu open) must end

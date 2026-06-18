@@ -22,7 +22,9 @@ the native Molotov streamer is unavailable.
   silently to a black screen.
 - **Self-recovery** — automatically reloads the stream after a playback failure
   or a stall, backing off between attempts, so a transient network or backend
-  glitch heals itself without intervention.
+  glitch heals itself without intervention. After repeated failures (the cached
+  stream URL and DRM token are short-lived and cannot be refreshed on the
+  device) it stops and asks you to cast again rather than looping silently.
 
 ### Remote controls
 

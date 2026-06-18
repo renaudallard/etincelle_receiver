@@ -434,11 +434,11 @@
             const messages = cast.framework.messages;
             if (mediaInfo.streamType === messages.StreamType.LIVE) {
                 const range = playerManager.getLiveSeekableRange();
-                if (range && typeof range.start === 'number'
-                    && typeof range.end === 'number') {
+                if (range && Number.isFinite(range.start)
+                    && Number.isFinite(range.end) && range.end > range.start) {
                     return { min: range.start, max: range.end };
                 }
-                // Live stream without a seekable window: seeking not possible.
+                // Live stream without a usable seekable window: seeking not possible.
                 return null;
             }
 

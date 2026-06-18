@@ -1079,6 +1079,10 @@
                     userAudioLanguage = null;
                     // A genuine new cast re-enables the self-reconnect after an earlier user stop.
                     userStopped = false;
+                    // Drop any recovery still pending for the previous stream: cancel its
+                    // armed reload (which would otherwise interrupt this new stream) and
+                    // reset the backoff so this cast retries from the base delay.
+                    recoveryDone();
                 }
                 // Reset the stall watchdog for the new stream.
                 lastMediaTime = -1;

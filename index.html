@@ -350,14 +350,6 @@
             clearTimeout(hideMenuTimer);
         }
 
-        function toggleMenu() {
-            if (menuVisible) {
-                hideMenu();
-            } else {
-                showMenu();
-            }
-        }
-
         function resetHideMenuTimer() {
             clearTimeout(hideMenuTimer);
             hideMenuTimer = setTimeout(() => {

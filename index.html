@@ -241,11 +241,12 @@
         let trackOptions = [];           // [{ trackId, label, language }] for the open submenu
         let hideHintTimer = null;
         let hideMenuTimer = null;
-        // Set when the user picks an audio track; stops the auto French
-        // override. userAudioLanguage remembers the chosen language so the
-        // choice survives an auto-reconnect, which reloads the same stream.
+        // Set when the user picks an audio track; stops the auto French override.
+        // userAudioTrackId / userAudioLanguage remember the choice so it survives an
+        // auto-reconnect, which reloads the same stream from its default audio again.
         let userSelectedAudio = false;
         let userAudioLanguage = null;
+        let userAudioTrackId = null;
         // Set once the control hint has been shown, so it appears only on the
         // first load and not on every channel change.
         let hintShown = false;
@@ -728,6 +729,7 @@
                 if (trackMenuType === 'AUDIO') {
                     userSelectedAudio = true;
                     userAudioLanguage = option.language;
+                    userAudioTrackId = option.trackId;
                 }
                 console.log('[Etincelle] ' + trackMenuType
                     + ' track changed to:', option.trackId);
@@ -835,9 +837,32 @@
         document.addEventListener('keydown', handleKeyDown);
 
         // Track Selection Logic
+        // Re-select the user's chosen audio track after a reload (auto-reconnect).
+        // Matches by trackId first, then by language, so a track with no language
+        // code is still restored and same-language duplicates are not confused.
+        function reapplyUserAudio() {
+            const audioTracksLocal = tracksOfType('AUDIO');
+            if (audioTracksLocal.length === 0) return;
+            const activeIds = activeTrackIdsOfType('AUDIO');
+            let target = (userAudioTrackId !== null && userAudioTrackId !== undefined)
+                ? audioTracksLocal.find(t => t.trackId === userAudioTrackId)
+                : null;
+            if (!target && userAudioLanguage) {
+                target = audioTracksLocal.find(t => t.language === userAudioLanguage);
+            }
+            if (target && !activeIds.includes(target.trackId)) {
+                setActiveTrackOfType('AUDIO', target.trackId);
+            }
+        }
+
         function forceFrenchAudio() {
-            // Respect a manual audio choice instead of forcing French back on.
-            if (userSelectedAudio) return;
+            // Respect a manual audio choice instead of forcing French back on. After
+            // an auto-reconnect the chosen track must be re-applied, since the reload
+            // starts the stream from its default audio again.
+            if (userSelectedAudio) {
+                reapplyUserAudio();
+                return;
+            }
 
             const audioTracksLocal = tracksOfType('AUDIO');
             if (audioTracksLocal.length === 0) return;
@@ -1085,6 +1110,7 @@
                 if (!isReconnect) {
                     userSelectedAudio = false;
                     userAudioLanguage = null;
+                    userAudioTrackId = null;
                     // A genuine new cast re-enables the self-reconnect after an earlier user stop.
                     userStopped = false;
                     // Drop any recovery still pending for the previous stream: cancel its

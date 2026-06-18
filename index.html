@@ -836,6 +836,7 @@
                     } else {
                         // No menu open: back/exit ends the cast instead of being swallowed.
                         stopCasting();
+                        event.preventDefault();
                     }
                     break;
             }

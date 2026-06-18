@@ -258,6 +258,10 @@
         let reconnectAttempts = 0;
         let reconnectTimer = null;
         let recovering = false;
+        // Set when the user stops or exits from the remote (STOP command or back/exit). It keeps the
+        // self-reconnect from healing playback back up, so a stop stops instead of restarting. Reset on
+        // the next genuine LOAD (a fresh cast).
+        let userStopped = false;
 
         // Stall watchdog: a hung segment download can sit in BUFFERING forever
         // without firing an error, so reload when the media clock stops
@@ -808,10 +812,14 @@
                 case 'back':
                     if (trackMenuVisible) {
                         hideTrackMenu();
+                        event.preventDefault();
                     } else if (menuVisible) {
                         hideMenu();
+                        event.preventDefault();
+                    } else {
+                        // No menu open: back/exit ends the cast instead of being swallowed.
+                        stopCasting();
                     }
-                    event.preventDefault();
                     break;
             }
         }
@@ -868,7 +876,7 @@
         // recovers. The recovering guard stops a burst of errors from stacking
         // several reloads on top of each other.
         function triggerReconnect() {
-            if (!lastLoadRequest || recovering) return;
+            if (!lastLoadRequest || recovering || userStopped) return;
             recovering = true;
 
             // Resume VOD where playback was instead of restarting from the
@@ -907,6 +915,17 @@
             reconnectTimer = null;
             reconnectAttempts = 0;
             recovering = false;
+        }
+
+        // A user-initiated stop or exit (remote STOP command, or back/exit with no menu open) must end
+        // casting, not heal back into playback: flag it so the self-reconnect stays disabled, drop any
+        // pending reconnect, then shut the receiver down so the cast session ends on the sender too.
+        function stopCasting() {
+            userStopped = true;
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+            stopPlayhead();
+            context.stop();
         }
 
         // Continue-watching playhead reporting. lastOffset is in seconds; the backend rejects 0 and
@@ -989,12 +1008,19 @@
 
         // When the item plays through to the end on the TV, mark it watched on the server.
         playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, event => {
-            if (event && event.endedReason === cast.framework.events.EndedReason.END_OF_STREAM) {
+            const reason = event && event.endedReason;
+            const reasons = cast.framework.events.EndedReason;
+            if (reason === reasons.END_OF_STREAM) {
                 // Fall back to the player's duration when the template carried none, and bypass the
                 // de-dup so this terminal "watched" write is never dropped by an identical last tick.
                 const dur = playheadDurationSec > 0 ? playheadDurationSec : Math.floor(playerManager.getDurationSec() || 0);
                 playheadLastSent = -1;
                 reportPlayhead(dur);
+            } else if (reason === reasons.STOPPED) {
+                // Playback was stopped (a STOP from the remote or a sender), as opposed to interrupted
+                // by a new load: end casting rather than letting the self-reconnect restart it. This is
+                // the reliable catch whichever way the remote's stop reaches the receiver.
+                stopCasting();
             }
             // Do not stop the timer here: it self-gates on PLAYING, so a replay/restart in the same
             // session resumes reporting without a fresh LOAD. It is cleared on the next LOAD or on
@@ -1051,6 +1077,8 @@
                 if (!isReconnect) {
                     userSelectedAudio = false;
                     userAudioLanguage = null;
+                    // A genuine new cast re-enables the self-reconnect after an earlier user stop.
+                    userStopped = false;
                 }
                 // Reset the stall watchdog for the new stream.
                 lastMediaTime = -1;
@@ -1135,6 +1163,17 @@
                 // Cache the resolved request so a later failure can reload it.
                 lastLoadRequest = loadRequestData;
                 return loadRequestData;
+            }
+        );
+
+        // A STOP command (the remote's stop button, or a sender stop) ends casting: flag it so the
+        // self-reconnect cannot heal playback back up, then tear the receiver down. The phone only
+        // sends STOP when it is leaving this receiver, so this never fires on a normal channel change.
+        playerManager.setMessageInterceptor(
+            cast.framework.messages.MessageType.STOP,
+            request => {
+                stopCasting();
+                return request;
             }
         );
 

@@ -237,7 +237,6 @@
         let trackMenuType = null;        // 'AUDIO' or 'TEXT' while the submenu is open
         let selectedIndex = 0;
         let trackSelectedIndex = 0;
-        let menuItems = [];
         let trackOptions = [];           // [{ trackId, label, language }] for the open submenu
         let hideHintTimer = null;
         let hideMenuTimer = null;
@@ -304,6 +303,7 @@
 
         // DOM Elements
         const controlMenu = document.getElementById('control-menu');
+        const menuItems = controlMenu.querySelectorAll('.menu-item');
         const trackSubmenu = document.getElementById('track-submenu');
         const menuHint = document.getElementById('menu-hint');
         const seekPreview = document.getElementById('seek-preview');
@@ -326,12 +326,6 @@
             hideNoticeTimer = setTimeout(() => {
                 notice.classList.remove('visible');
             }, 6000);
-        }
-
-        // Initialize Menu Items
-        function initMenu() {
-            menuItems = document.querySelectorAll('.menu-item');
-            updateMenuSelection();
         }
 
         // Menu Visibility
@@ -1255,8 +1249,8 @@
             }
         );
 
-        // Initialize
-        initMenu();
+        // Highlight the first control so the menu has a selection on first open.
+        updateMenuSelection();
 
         // Start Receiver
         const options = new cast.framework.CastReceiverOptions();

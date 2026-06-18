@@ -284,6 +284,7 @@
         let playheadDurationSec = 0;
         let playheadLastSent = -1;
         let playheadTimer = null;
+        let playheadInflight = false;
 
         // Seek state
         const SEEK_STEP_BACK = -10;
@@ -970,13 +971,25 @@
         // Continue-watching playhead reporting. lastOffset is in seconds; the backend rejects 0 and
         // there is no point resending the same second. Fire-and-forget; the backend allows CORS for
         // this origin, so a failed preflight or post must never affect playback.
-        function reportPlayhead(offsetSec) {
+        function reportPlayhead(offsetSec, force) {
             if (!playheadUrl || !Number.isFinite(offsetSec) || offsetSec <= 0) return;
-            if (offsetSec === playheadLastSent) return;
+            if (!force && offsetSec === playheadLastSent) return;
+            // Skip a periodic report while a previous POST is still in flight, so a slow
+            // backend cannot pile up overlapping requests. The terminal write passes
+            // force to bypass both the de-dup and this guard.
+            if (!force && playheadInflight) return;
             playheadLastSent = offsetSec;
+            playheadInflight = true;
             const body = Object.assign({}, playheadPayload, { lastOffset: offsetSec });
-            fetch(playheadUrl, { method: 'POST', headers: playheadHeaders, body: JSON.stringify(body) })
-                .catch(e => console.warn('[Etincelle] playhead post failed', e));
+            // Abort a hung POST before the next tick so a stuck socket is not leaked.
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), PLAYHEAD_INTERVAL - 1000);
+            fetch(playheadUrl, {
+                method: 'POST', headers: playheadHeaders,
+                body: JSON.stringify(body), signal: controller.signal
+            })
+                .catch(e => console.warn('[Etincelle] playhead post failed', e))
+                .finally(() => { clearTimeout(timer); playheadInflight = false; });
         }
 
         function stopPlayhead() {
@@ -1057,8 +1070,7 @@
                 const playerDur = Math.floor(playerManager.getDurationSec() || 0);
                 const dur = playheadDurationSec > 0 ? playheadDurationSec
                     : (playerDur > 0 ? playerDur : Math.max(0, playheadLastSent));
-                playheadLastSent = -1;
-                reportPlayhead(dur);
+                reportPlayhead(dur, true);
             } else if (reason === reasons.STOPPED) {
                 // Playback was stopped (a STOP from the remote or a sender), as opposed to interrupted
                 // by a new load: end casting rather than letting the self-reconnect restart it. This is

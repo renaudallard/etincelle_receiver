@@ -287,6 +287,17 @@
         let lastMediaTime = -1;
         let stalledFor = 0;
 
+        // Last playback position seen while playing, so a reconnect can resume a
+        // VOD where it was even when the media clock has collapsed to 0 in a
+        // torn-down error state. Senders cast VOD with currentTime 0 (the real
+        // start offset arrives as a separate post-load seek or the initial
+        // resume point) and never advance it, so without this a missed sample
+        // reloads from the beginning. Live is excluded: it rejoins the edge.
+        let lastKnownPos = 0;
+        // Cached at load because getMediaInformation() can be null mid-recovery,
+        // so a reconnect cannot rely on it to tell live from VOD.
+        let streamIsLive = false;
+
         // Continue-watching: the receiver POSTs the playback position to the Fubo playhead while
         // casting, because the phone is not reliably present during a cast session. All of these are
         // populated from the LOAD customData; they stay null (no reporting) when it is absent.
@@ -956,16 +967,18 @@
 
             recovering = true;
 
-            // Resume VOD where playback was instead of restarting from the
-            // original offset cached at load time. Live reloads at the edge, so
-            // leave its start time untouched.
-            const mediaInfo = playerManager.getMediaInformation();
-            if (mediaInfo && mediaInfo.streamType
-                    !== cast.framework.messages.StreamType.LIVE) {
+            // Resume a VOD where playback was instead of restarting from the
+            // cached request, whose currentTime is only the cast-time start
+            // offset (0 for most senders), not the current position. Prefer the
+            // freshest clock sample but fall back to the last position seen while
+            // playing, since a torn-down error state reports 0 here and would
+            // otherwise reload from the beginning. Live is left untouched so it
+            // rejoins the edge. streamIsLive is used instead of
+            // getMediaInformation(), which can be null mid-recovery.
+            if (!streamIsLive) {
                 const pos = playerManager.getCurrentTimeSec();
-                if (Number.isFinite(pos) && pos > 0) {
-                    lastLoadRequest.currentTime = pos;
-                }
+                if (Number.isFinite(pos) && pos > 0) lastKnownPos = pos;
+                if (lastKnownPos > 0) lastLoadRequest.currentTime = lastKnownPos;
             }
 
             const delay = Math.min(
@@ -1157,6 +1170,9 @@
                 return;
             }
             const t = playerManager.getCurrentTimeSec();
+            // Remember the position while playing so a reconnect can resume here
+            // even if the clock is gone by then. Live rejoins the edge instead.
+            if (!streamIsLive && Number.isFinite(t) && t > 0) lastKnownPos = t;
             // Any change in the media clock, forward or a backward seek, means
             // playback is not frozen. Only an unchanged clock is a real stall;
             // tracking the max instead would count a rewind as a stall.
@@ -1198,6 +1214,9 @@
                     // armed reload (which would otherwise interrupt this new stream) and
                     // reset the backoff so this cast retries from the base delay.
                     recoveryDone();
+                    // Drop the previous stream's resume position so a new cast
+                    // does not inherit it.
+                    lastKnownPos = 0;
                 }
                 // Reset the stall watchdog for the new stream.
                 lastMediaTime = -1;
@@ -1205,6 +1224,11 @@
 
                 const media = loadRequestData.media;
                 const customData = media.customData || {};
+
+                // Cache live/VOD for the reconnect path, which may run when
+                // getMediaInformation() is null.
+                streamIsLive =
+                    media.streamType === cast.framework.messages.StreamType.LIVE;
 
                 if (customData.stream_url) media.contentId = customData.stream_url;
                 if (customData.content_type) media.contentType = customData.content_type;

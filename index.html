@@ -291,10 +291,9 @@
         const SEEK_STEP_FWD = 30;
         const SEEK_COMMIT_DELAY = 400;
         const SEEK_PREVIEW_LINGER = 800;
-        // Holding the key auto-repeats keydown; each repeat in the same
-        // direction within the window grows the step, so a held button scrubs
-        // faster the longer it is held (capped).
-        const SEEK_REPEAT_WINDOW = 450;
+        // Holding the key auto-repeats keydown; each repeat in the same direction
+        // grows the step, so a held button scrubs faster the longer it is held
+        // (capped). Distinct taps do not accelerate.
         const SEEK_ACCEL_STEP = 0.6;
         const SEEK_MAX_MULTIPLIER = 12;
         let pendingSeekTime = null;
@@ -302,7 +301,6 @@
         let hideSeekPreviewTimer = null;
         let seekRepeat = 0;
         let seekDir = 0;
-        let lastSeekAt = 0;
 
         // DOM Elements
         const controlMenu = document.getElementById('control-menu');
@@ -522,23 +520,23 @@
 
         // Accumulate a relative seek and arm the debounce timer. Repeated key
         // presses build up a single target so the stream is only seeked once.
-        function stepSeek(deltaSec) {
+        function stepSeek(deltaSec, isRepeat) {
             if (menuVisible || trackMenuVisible) return;
 
             const bounds = getSeekBounds();
             if (!bounds) return;
 
-            // Accelerate while the key is held: count consecutive presses in
-            // the same direction within the repeat window and grow the step.
-            const now = Date.now();
+            // Accelerate only while the button is genuinely held (key auto-repeat):
+            // count consecutive repeats in the same direction and grow the step, so
+            // distinct deliberate taps each start at the base step rather than
+            // compounding into an oversized jump.
             const direction = deltaSec < 0 ? -1 : 1;
-            if (direction === seekDir && (now - lastSeekAt) < SEEK_REPEAT_WINDOW) {
+            if (isRepeat && direction === seekDir) {
                 seekRepeat++;
             } else {
                 seekRepeat = 0;
             }
             seekDir = direction;
-            lastSeekAt = now;
 
             const multiplier = Math.min(
                 SEEK_MAX_MULTIPLIER, 1 + seekRepeat * SEEK_ACCEL_STEP
@@ -802,7 +800,7 @@
                     if (menuVisible && !trackMenuVisible) {
                         navigateMenu(-1);
                     } else if (!menuVisible) {
-                        stepSeek(SEEK_STEP_BACK);
+                        stepSeek(SEEK_STEP_BACK, event.repeat);
                     }
                     event.preventDefault();
                     break;
@@ -811,7 +809,7 @@
                     if (menuVisible && !trackMenuVisible) {
                         navigateMenu(1);
                     } else if (!menuVisible) {
-                        stepSeek(SEEK_STEP_FWD);
+                        stepSeek(SEEK_STEP_FWD, event.repeat);
                     }
                     event.preventDefault();
                     break;

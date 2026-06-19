@@ -272,6 +272,16 @@
         let reconnectTimer = null;
         let loadGuardTimer = null;
         let recovering = false;
+        // After a playback error, hold off our own (stale-token) reload this long to let the phone
+        // re-resolve fresh credentials and re-cast, which supersedes it; self-reconnect only if no
+        // fresh cast arrives (e.g. the phone is away). The phone is the only side that can refresh the
+        // short-lived stream/DRM tokens.
+        const RESOLVE_GRACE_MS = 4000;
+        let reconnectFallbackTimer = null;
+        // Bumped whenever recovery completes (a fresh cast supersedes us, or playback resumes) so an
+        // in-flight reconnect load() that gets superseded does not re-arm another reconnect over the
+        // now-healthy stream when its own promise later rejects (e.g. aborted by the fresh cast).
+        let reconnectGeneration = 0;
         // Set when the user stops or exits from the remote (STOP command or back/exit). It keeps the
         // self-reconnect from healing playback back up, so a stop stops instead of restarting. Reset on
         // the next genuine LOAD (a fresh cast).
@@ -977,6 +987,9 @@
         // recovers. The recovering guard stops a burst of errors from stacking
         // several reloads on top of each other.
         function triggerReconnect() {
+            // A direct trigger (or the grace-period fallback firing) supersedes any pending fallback.
+            clearTimeout(reconnectFallbackTimer);
+            reconnectFallbackTimer = null;
             if (!lastLoadRequest || recovering || userStopped) return;
 
             // Give up once the cached credentials are clearly dead instead of
@@ -1018,9 +1031,12 @@
                 // Fail the attempt if load() never settles, so a hung load cannot
                 // freeze recovery. settled lets the first of {success, failure,
                 // timeout} win and ignores the laggards.
+                const gen = reconnectGeneration;
                 let settled = false;
                 const settle = (failed, reason) => {
-                    if (settled) return;
+                    // Drop this settle if a fresh cast already superseded the reload (recoveryDone bumps
+                    // the generation), so an aborted stale load cannot re-arm reconnect over good playback.
+                    if (settled || gen !== reconnectGeneration) return;
                     settled = true;
                     clearTimeout(loadGuardTimer);
                     loadGuardTimer = null;
@@ -1047,6 +1063,9 @@
             reconnectTimer = null;
             clearTimeout(loadGuardTimer);
             loadGuardTimer = null;
+            clearTimeout(reconnectFallbackTimer);
+            reconnectFallbackTimer = null;
+            reconnectGeneration++;
             reconnectAttempts = 0;
             recovering = false;
             hideNotice();
@@ -1059,6 +1078,8 @@
             userStopped = true;
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
+            clearTimeout(reconnectFallbackTimer);
+            reconnectFallbackTimer = null;
             stopPlayhead();
             context.stop();
         }
@@ -1148,7 +1169,16 @@
             const code = event ? event.detailedErrorCode : null;
             console.error('[Etincelle] Playback error:', code, event);
             if (code === cast.framework.events.DetailedErrorCode.LOAD_INTERRUPTED) return;
-            triggerReconnect();
+            // Reloading our cached stream/DRM token cannot recover an expired-credential failure (we
+            // cannot refresh it here). Give the phone a brief window to re-resolve fresh credentials
+            // and re-cast - a fresh LOAD cancels this via recoveryDone - and self-reconnect only as a
+            // fallback if none arrives.
+            if (recovering || userStopped || reconnectFallbackTimer !== null) return;
+            showNotice('Connection lost, reconnecting...');
+            reconnectFallbackTimer = setTimeout(() => {
+                reconnectFallbackTimer = null;
+                triggerReconnect();
+            }, RESOLVE_GRACE_MS);
         });
 
         // Clear the backoff once playback is actually running again.
@@ -1185,7 +1215,9 @@
 
         // Reload if the media clock freezes while playback should be advancing.
         setInterval(() => {
-            if (recovering) {
+            // Also stand down while the post-error grace is pending, so the stall path does not pre-empt
+            // the phone's re-resolve with a stale-token reload.
+            if (recovering || reconnectFallbackTimer !== null) {
                 stalledFor = 0;
                 return;
             }

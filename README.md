@@ -23,12 +23,14 @@ the native Molotov streamer is unavailable.
   resumes that far behind the live edge instead of jumping to the live edge.
 - **Error notices** — surfaces playback errors briefly on screen instead of failing
   silently to a black screen.
-- **Self-recovery** — automatically reloads the stream after a playback failure
-  or a stall, backing off between attempts, so a transient network or backend
-  glitch heals itself without intervention. A reload resumes a replay where
-  playback was rather than from the beginning. After repeated failures (the
-  cached stream URL and DRM token are short-lived and cannot be refreshed on the
-  device) it stops and asks you to cast again rather than looping silently.
+- **Self-recovery** — recovers from a playback failure or a stall without
+  intervention. On an error it first waits briefly for the phone to re-resolve
+  fresh credentials and re-cast — the cached stream URL and DRM token are
+  short-lived and cannot be refreshed on the device, so only the phone can mint
+  new ones — and that fresh cast supersedes any reload. If no fresh cast arrives
+  (e.g. the phone is away), it falls back to reloading the cached stream, backing
+  off between attempts, and a reload resumes a replay where playback was. After
+  repeated failures it stops and asks you to cast again rather than looping silently.
 
 ### Remote controls
 

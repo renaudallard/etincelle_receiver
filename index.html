@@ -297,6 +297,11 @@
         // Cached at load because getMediaInformation() can be null mid-recovery,
         // so a reconnect cannot rely on it to tell live from VOD.
         let streamIsLive = false;
+        // A rewound live cast (live_rewind_sec in the LOAD customData) asks us to resume this many
+        // seconds behind the live edge, applied once the seekable window is known.
+        let pendingLiveRewindSec = 0;
+        let rewindRetries = 0;
+        let rewindRetryTimer = null;
 
         // Continue-watching: the receiver POSTs the playback position to the Fubo playhead while
         // casting, because the phone is not reliably present during a cast session. All of these are
@@ -487,6 +492,27 @@
             const bounds = getSeekBounds();
             if (!bounds) return;
             playerManager.seek(clampBounds(target, bounds));
+        }
+
+        // Resume a rewound live cast behind the live edge, once the seekable window is known. The
+        // range can lag load completion (a slow DRM handshake can take seconds), so retry for a while
+        // before giving up. The pending timer is tracked so a new LOAD can cancel a stale retry.
+        function applyPendingRewind() {
+            rewindRetryTimer = null;
+            if (pendingLiveRewindSec <= 0) return;
+            const bounds = getSeekBounds();
+            if (!bounds || bounds.max === null) {
+                if (rewindRetries++ < 30) {
+                    rewindRetryTimer = setTimeout(applyPendingRewind, 300);
+                } else {
+                    pendingLiveRewindSec = 0;
+                    rewindRetries = 0;
+                }
+                return;
+            }
+            playerManager.seek(clampBounds(bounds.max - pendingLiveRewindSec, bounds));
+            pendingLiveRewindSec = 0;
+            rewindRetries = 0;
         }
 
         function formatTime(totalSec) {
@@ -1101,6 +1127,7 @@
         // Event Listeners
         playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
             forceFrenchAudio();
+            applyPendingRewind();
             // Show the hint briefly, but only on the first load of the session.
             if (!hintShown) {
                 hintShown = true;
@@ -1232,6 +1259,18 @@
 
                 if (customData.stream_url) media.contentId = customData.stream_url;
                 if (customData.content_type) media.contentType = customData.content_type;
+
+                // A rewound live cast resumes behind the live edge once the window is known. Re-apply
+                // it on a reconnect too: the seek is relative to the current live edge, so re-running
+                // it after a blip keeps the viewer the same distance behind live rather than snapping
+                // to it. Cancel any retry still pending from the previous load first.
+                if (rewindRetryTimer !== null) {
+                    clearTimeout(rewindRetryTimer);
+                    rewindRetryTimer = null;
+                }
+                pendingLiveRewindSec = (streamIsLive && customData.live_rewind_sec > 0)
+                    ? customData.live_rewind_sec : 0;
+                rewindRetries = 0;
 
                 // Drive continue-watching from the receiver (the phone may be away while casting).
                 setupPlayhead(customData);

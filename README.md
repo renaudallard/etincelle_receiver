@@ -18,6 +18,9 @@ the native Molotov streamer is unavailable.
   subtitles off), from the on-screen menu.
 - **Remote controls** — an on-screen menu and direct D-pad seeking for devices with
   a remote (Chromecast with Google TV, Android TV).
+- **Live rewind hand-off** — when a live show is cast after rewinding into its
+  time-shift window, the receiver reads `live_rewind_sec` from the `customData` and
+  resumes that far behind the live edge instead of jumping to the live edge.
 - **Error notices** — surfaces playback errors briefly on screen instead of failing
   silently to a black screen.
 - **Self-recovery** — automatically reloads the stream after a playback failure

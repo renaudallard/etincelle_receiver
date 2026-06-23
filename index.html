@@ -500,6 +500,17 @@
             }
         }
 
+        // Toggle play/pause from the remote's media key. The control menu has no play/pause item and
+        // CAF does not pause this live stream from the raw keydown on its own, so handle it explicitly.
+        function togglePlayPause() {
+            const messages = cast.framework.messages;
+            if (playerManager.getPlayerState() === messages.PlayerState.PAUSED) {
+                playerManager.play();
+            } else {
+                playerManager.pause();
+            }
+        }
+
         function resetHideMenuTimer() {
             clearTimeout(hideMenuTimer);
             hideMenuTimer = setTimeout(() => {
@@ -932,6 +943,12 @@
                 case 'ArrowLeft': return 'left';
                 case 'ArrowRight': return 'right';
                 case 'Enter': return 'enter';
+                case 'MediaPlayPause':
+                case 'MediaPlay':
+                case 'MediaPause':
+                case 'Pause':
+                case 'Play':
+                    return 'playpause';
                 case 'Back':
                 case 'BrowserBack':
                 case 'GoBack':
@@ -944,6 +961,12 @@
                 case 37: return 'left';
                 case 39: return 'right';
                 case 13: return 'enter';
+                case 19:   // Pause
+                case 85:   // media play/pause
+                case 126:  // media play
+                case 127:  // media pause
+                case 179:  // media play/pause (some webviews)
+                    return 'playpause';
                 case 8:
                 case 27:
                     return 'back';
@@ -1000,6 +1023,11 @@
                         flushPendingSeek();
                         showMenu();
                     }
+                    event.preventDefault();
+                    break;
+
+                case 'playpause':
+                    togglePlayPause();
                     event.preventDefault();
                     break;
 

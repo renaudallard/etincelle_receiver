@@ -40,6 +40,11 @@ the native Molotov streamer is unavailable.
 | **▼** | Open the menu (rewind, forward, restart, audio track, subtitles). |
 | **▲ / Back** | Close the menu. |
 | **OK** | Open the menu, or confirm the highlighted item. |
+| **Play/Pause** | Pause or resume playback. On a live channel, pausing drops behind the live edge into the time-shift window. |
+
+During live playback a thin bar at the bottom marks the **current programme** within the time-shift
+window: the part of the show watched so far is filled in, the buffer before the show starts is drawn
+in a distinct colour, and a tick marks the live edge.
 
 ## Hosting
 

@@ -178,6 +178,60 @@
         #notice.visible {
             opacity: 1;
         }
+
+        /* Live programme bar (mirrors the phone): the full ~4h DVR window at true scale, the current
+           show marked, the buffer before its start in a distinct colour. Shown with the control menu. */
+        #program-bar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 28px;
+            padding: 0 48px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+            pointer-events: none;
+        }
+        #program-bar.visible {
+            opacity: 1;
+        }
+        #program-bar-track {
+            position: relative;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.25);
+        }
+        #pb-earlier {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            border-radius: 3px;
+            background: #5b6478;
+        }
+        #pb-played {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: #ffc107;
+        }
+        #pb-live {
+            position: absolute;
+            top: -4px;
+            width: 2px;
+            height: 14px;
+            margin-left: -2px;
+            background: #e50914;
+        }
+        #pb-thumb {
+            position: absolute;
+            top: -3px;
+            width: 12px;
+            height: 12px;
+            margin-left: -6px;
+            border-radius: 50%;
+            background: #fff;
+        }
     </style>
 </head>
 <body>
@@ -224,6 +278,16 @@
         </div>
         <div id="seek-preview-track">
             <div id="seek-preview-fill"></div>
+        </div>
+    </div>
+
+    <!-- Live programme bar -->
+    <div id="program-bar">
+        <div id="program-bar-track">
+            <div id="pb-earlier"></div>
+            <div id="pb-played"></div>
+            <div id="pb-live"></div>
+            <div id="pb-thumb"></div>
         </div>
     </div>
 
@@ -313,6 +377,11 @@
         let rewindRetries = 0;
         let rewindRetryTimer = null;
 
+        // The on-screen programme's air-window (epoch ms) from the LOAD customData, so the live bar can
+        // mark the current show. 0 when the sender gives no times; the bar then spans the window plain.
+        let programStartMs = 0;
+        let programEndMs = 0;
+
         // Continue-watching: the receiver POSTs the playback position to the Fubo playhead while
         // casting, because the phone is not reliably present during a cast session. All of these are
         // populated from the LOAD customData; they stay null (no reporting) when it is absent.
@@ -352,6 +421,11 @@
         const seekPreviewTrack = document.getElementById('seek-preview-track');
         const seekPreviewFill = document.getElementById('seek-preview-fill');
         const notice = document.getElementById('notice');
+        const programBar = document.getElementById('program-bar');
+        const pbEarlier = document.getElementById('pb-earlier');
+        const pbPlayed = document.getElementById('pb-played');
+        const pbLive = document.getElementById('pb-live');
+        const pbThumb = document.getElementById('pb-thumb');
 
         // Transient Notice
         // The receiver otherwise fails to a black screen with no indication of
@@ -390,6 +464,40 @@
             controlMenu.classList.remove('visible');
             trackSubmenu.classList.remove('visible');
             clearTimeout(hideMenuTimer);
+        }
+
+        // Live programme bar: redraw the show band over the seekable window at true scale, anchoring the
+        // live edge (the window's max) to the wall clock. Shown whenever a live stream is playing, since
+        // a phone-driven cast has no TV remote to open the control menu. Fully defensive: any gap (not
+        // live, no window, stale programme) just hides the bar.
+        function updateProgramBar() {
+            try {
+                if (!streamIsLive) { programBar.classList.remove('visible'); return; }
+                const bounds = getSeekBounds();
+                if (!bounds || bounds.max === null) { programBar.classList.remove('visible'); return; }
+                const dur = bounds.max - bounds.min;
+                if (!(dur > 0)) { programBar.classList.remove('visible'); return; }
+                const clamp01 = v => (v < 0 ? 0 : (v > 1 ? 1 : v));
+                const current = playerManager.getCurrentTimeSec();
+                const playedFrac = clamp01((current - bounds.min) / dur);
+                // The buffer before the programme starts is a distinct colour. Map the programme start
+                // (epoch) to a fraction by treating the window's max as "now"; drop the band once the
+                // programme has ended (the receiver does not re-resolve the next one mid-cast).
+                const hasBand = programStartMs > 0 && programEndMs > 0 && Date.now() <= programEndMs;
+                let showStartFrac = 0;
+                if (hasBand) {
+                    const showStartSec = bounds.max - (Date.now() - programStartMs) / 1000;
+                    showStartFrac = clamp01((showStartSec - bounds.min) / dur);
+                }
+                pbEarlier.style.width = (showStartFrac * 100) + '%';
+                pbPlayed.style.left = (showStartFrac * 100) + '%';
+                pbPlayed.style.width = (Math.max(0, playedFrac - showStartFrac) * 100) + '%';
+                pbLive.style.left = '100%';
+                pbThumb.style.left = (playedFrac * 100) + '%';
+                programBar.classList.add('visible');
+            } catch (e) {
+                programBar.classList.remove('visible');
+            }
         }
 
         function resetHideMenuTimer() {
@@ -1213,6 +1321,9 @@
         context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, stopPlayhead);
         context.addEventListener(cast.framework.system.EventType.SHUTDOWN, stopPlayhead);
 
+        // Keep the live programme bar tracking the playhead while it is on screen.
+        setInterval(updateProgramBar, 1000);
+
         // Reload if the media clock freezes while playback should be advancing.
         setInterval(() => {
             // Also stand down while the post-error grace is pending, so the stall path does not pre-empt
@@ -1303,6 +1414,10 @@
                 pendingLiveRewindSec = (streamIsLive && customData.live_rewind_sec > 0)
                     ? customData.live_rewind_sec : 0;
                 rewindRetries = 0;
+
+                // The programme air-window for the live bar; live only, 0 when not supplied.
+                programStartMs = streamIsLive ? (Number(customData.program_start_ms) || 0) : 0;
+                programEndMs = streamIsLive ? (Number(customData.program_end_ms) || 0) : 0;
 
                 // Drive continue-watching from the receiver (the phone may be away while casting).
                 setupPlayhead(customData);

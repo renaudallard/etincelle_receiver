@@ -180,7 +180,8 @@
         }
 
         /* Live programme bar (mirrors the phone): the full ~4h DVR window at true scale, the current
-           show marked, the buffer before its start in a distinct colour. Shown with the control menu. */
+           show marked, the buffer before its start in a distinct colour. Shown while the programme
+           bounds are known. */
         #program-bar {
             position: fixed;
             left: 0;
@@ -467,28 +468,26 @@
         }
 
         // Live programme bar: redraw the show band over the seekable window at true scale, anchoring the
-        // live edge (the window's max) to the wall clock. Shown whenever a live stream is playing, since
-        // a phone-driven cast has no TV remote to open the control menu. Fully defensive: any gap (not
-        // live, no window, stale programme) just hides the bar.
+        // live edge (the window's max) to the wall clock. Shown only while a live programme's bounds are
+        // known: an older sender omits them, and a programme past its end is not re-resolved mid-cast, so
+        // a bar with nothing to mark would just be clutter. Fully defensive: any gap hides the bar.
         function updateProgramBar() {
             try {
                 if (!streamIsLive) { programBar.classList.remove('visible'); return; }
+                // Only mark an actual current programme; no bounds (older sender) or past its end: no bar.
+                const hasBand = programStartMs > 0 && programEndMs > 0 && Date.now() <= programEndMs;
+                if (!hasBand) { programBar.classList.remove('visible'); return; }
                 const bounds = getSeekBounds();
                 if (!bounds || bounds.max === null) { programBar.classList.remove('visible'); return; }
                 const dur = bounds.max - bounds.min;
                 if (!(dur > 0)) { programBar.classList.remove('visible'); return; }
-                const clamp01 = v => (v < 0 ? 0 : (v > 1 ? 1 : v));
+                const clamp01 = v => (Number.isFinite(v) ? (v < 0 ? 0 : (v > 1 ? 1 : v)) : 0);
                 const current = playerManager.getCurrentTimeSec();
                 const playedFrac = clamp01((current - bounds.min) / dur);
                 // The buffer before the programme starts is a distinct colour. Map the programme start
-                // (epoch) to a fraction by treating the window's max as "now"; drop the band once the
-                // programme has ended (the receiver does not re-resolve the next one mid-cast).
-                const hasBand = programStartMs > 0 && programEndMs > 0 && Date.now() <= programEndMs;
-                let showStartFrac = 0;
-                if (hasBand) {
-                    const showStartSec = bounds.max - (Date.now() - programStartMs) / 1000;
-                    showStartFrac = clamp01((showStartSec - bounds.min) / dur);
-                }
+                // (epoch) to a fraction by treating the window's max as "now".
+                const showStartSec = bounds.max - (Date.now() - programStartMs) / 1000;
+                const showStartFrac = clamp01((showStartSec - bounds.min) / dur);
                 pbEarlier.style.width = (showStartFrac * 100) + '%';
                 pbPlayed.style.left = (showStartFrac * 100) + '%';
                 pbPlayed.style.width = (Math.max(0, playedFrac - showStartFrac) * 100) + '%';

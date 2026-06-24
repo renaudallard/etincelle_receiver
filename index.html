@@ -180,8 +180,8 @@
         }
 
         /* Live programme bar (mirrors the phone): the full ~4h DVR window at true scale, the current
-           show marked, the buffer before its start in a distinct colour. Shown while the programme
-           bounds are known. */
+           show marked, the buffer before its start in a distinct colour. Shown only while the user is
+           actively seeking, alongside the seek preview; hidden during passive playback. */
         #program-bar {
             position: fixed;
             left: 0;
@@ -410,6 +410,9 @@
         let hideSeekPreviewTimer = null;
         let seekRepeat = 0;
         let seekDir = 0;
+        // The programme bar rides with the seek preview: shown only while actively scrubbing, not during
+        // passive playback. True from the first seek key until the preview lingers out.
+        let seekOverlayActive = false;
 
         // DOM Elements
         const controlMenu = document.getElementById('control-menu');
@@ -468,12 +471,13 @@
         }
 
         // Live programme bar: redraw the show band over the seekable window at true scale, anchoring the
-        // live edge (the window's max) to the wall clock. Shown only while a live programme's bounds are
-        // known: an older sender omits them, and a programme past its end is not re-resolved mid-cast, so
-        // a bar with nothing to mark would just be clutter. Fully defensive: any gap hides the bar.
+        // live edge (the window's max) to the wall clock. Shown only while a seek is in progress (it rides
+        // with the seek preview overlay); during passive playback there is nothing to scrub, so a bar on
+        // screen would just be clutter. While seeking the thumb tracks the pending seek target. Still needs
+        // a live stream with a current programme and a usable window; any gap hides the bar.
         function updateProgramBar() {
             try {
-                if (!streamIsLive) { programBar.classList.remove('visible'); return; }
+                if (!seekOverlayActive || !streamIsLive) { programBar.classList.remove('visible'); return; }
                 // Only mark an actual current programme; no bounds (older sender) or past its end: no bar.
                 const hasBand = programStartMs > 0 && programEndMs > 0 && Date.now() <= programEndMs;
                 if (!hasBand) { programBar.classList.remove('visible'); return; }
@@ -482,7 +486,8 @@
                 const dur = bounds.max - bounds.min;
                 if (!(dur > 0)) { programBar.classList.remove('visible'); return; }
                 const clamp01 = v => (Number.isFinite(v) ? (v < 0 ? 0 : (v > 1 ? 1 : v)) : 0);
-                const current = playerManager.getCurrentTimeSec();
+                // Track the pending seek target while scrubbing; fall back to the live playhead.
+                const current = (pendingSeekTime !== null) ? pendingSeekTime : playerManager.getCurrentTimeSec();
                 const playedFrac = clamp01((current - bounds.min) / dur);
                 // The buffer before the programme starts is a distinct colour. Map the programme start
                 // (epoch) to a fraction by treating the window's max as "now".
@@ -685,10 +690,16 @@
         function showSeekPreview() {
             clearTimeout(hideSeekPreviewTimer);
             seekPreview.classList.add('visible');
+            // Raise the programme bar alongside the preview and draw the band for the current seek target.
+            seekOverlayActive = true;
+            updateProgramBar();
         }
 
         function hideSeekPreview() {
             seekPreview.classList.remove('visible');
+            // Drop the programme bar in lockstep with the seek preview.
+            seekOverlayActive = false;
+            programBar.classList.remove('visible');
         }
 
         // Accumulate a relative seek and arm the debounce timer. Repeated key
@@ -1348,7 +1359,7 @@
         context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, stopPlayhead);
         context.addEventListener(cast.framework.system.EventType.SHUTDOWN, stopPlayhead);
 
-        // Keep the live programme bar tracking the playhead while it is on screen.
+        // Refresh the live programme bar while it is on screen during a seek; it self-gates off otherwise.
         setInterval(updateProgramBar, 1000);
 
         // Reload if the media clock freezes while playback should be advancing.

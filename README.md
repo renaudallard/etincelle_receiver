@@ -42,10 +42,11 @@ the native Molotov streamer is unavailable.
 | **OK** | Open the menu, or confirm the highlighted item. |
 | **Play/Pause** | Pause or resume playback. On a live channel, pausing drops behind the live edge into the time-shift window. |
 
-While you seek on a live channel, a thin bar at the bottom marks the **current programme** within the
-time-shift window: the part of the show up to the seek target is filled in, the buffer before the show
-starts is drawn in a distinct colour, and a tick marks the live edge. The bar appears alongside the seek
-preview and clears once you stop seeking, so it never sits on screen during normal playback.
+While you seek on a live channel, a thin bar at the bottom is scaled to the **current programme**: the
+part of the show up to the seek target is filled in, the live edge sits part-way along with the
+not-yet-aired remainder dimmer past it, a tick marks the live edge, and any stretch too old to rewind
+to is drawn in a distinct colour. The bar appears alongside the seek preview and clears once you stop
+seeking, so it never sits on screen during normal playback.
 
 ## Hosting
 

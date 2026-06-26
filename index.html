@@ -179,9 +179,10 @@
             opacity: 1;
         }
 
-        /* Live programme bar (mirrors the phone): the full ~4h DVR window at true scale, the current
-           show marked, the buffer before its start in a distinct colour. Shown only while the user is
-           actively seeking, alongside the seek preview; hidden during passive playback. */
+        /* Live programme bar (mirrors the phone): scaled to the current programme, the live edge
+           part-way along it and the not-yet-aired remainder dimmer past it, the stretch too old to
+           rewind to in a distinct colour. Shown only while the user is actively seeking, alongside the
+           seek preview; hidden during passive playback. */
         #program-bar {
             position: fixed;
             left: 0;
@@ -200,7 +201,14 @@
             position: relative;
             height: 6px;
             border-radius: 3px;
-            background: rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.15);
+        }
+        #pb-aired {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.30);
         }
         #pb-earlier {
             position: absolute;
@@ -285,6 +293,7 @@
     <!-- Live programme bar -->
     <div id="program-bar">
         <div id="program-bar-track">
+            <div id="pb-aired"></div>
             <div id="pb-earlier"></div>
             <div id="pb-played"></div>
             <div id="pb-live"></div>
@@ -426,6 +435,7 @@
         const seekPreviewFill = document.getElementById('seek-preview-fill');
         const notice = document.getElementById('notice');
         const programBar = document.getElementById('program-bar');
+        const pbAired = document.getElementById('pb-aired');
         const pbEarlier = document.getElementById('pb-earlier');
         const pbPlayed = document.getElementById('pb-played');
         const pbLive = document.getElementById('pb-live');
@@ -470,8 +480,8 @@
             clearTimeout(hideMenuTimer);
         }
 
-        // Live programme bar: redraw the show band over the seekable window at true scale, anchoring the
-        // live edge (the window's max) to the wall clock. Shown only while a seek is in progress (it rides
+        // Live programme bar: redraw the bar scaled to the current programme, with the live edge
+        // part-way along it (the window's max is "now"). Shown only while a seek is in progress (it rides
         // with the seek preview overlay); during passive playback there is nothing to scrub, so a bar on
         // screen would just be clutter. While seeking the thumb tracks the pending seek target. Still needs
         // a live stream with a current programme and a usable window; any gap hides the bar.
@@ -482,21 +492,27 @@
                 const hasBand = programStartMs > 0 && programEndMs > 0 && Date.now() <= programEndMs;
                 if (!hasBand) { programBar.classList.remove('visible'); return; }
                 const bounds = getSeekBounds();
-                if (!bounds || bounds.max === null) { programBar.classList.remove('visible'); return; }
-                const dur = bounds.max - bounds.min;
-                if (!(dur > 0)) { programBar.classList.remove('visible'); return; }
+                if (!bounds || bounds.max === null || !(bounds.max > bounds.min)) { programBar.classList.remove('visible'); return; }
+                const programDurMs = programEndMs - programStartMs;
+                if (!(programDurMs > 0)) { programBar.classList.remove('visible'); return; }
+                const now = Date.now();
                 const clamp01 = v => (Number.isFinite(v) ? (v < 0 ? 0 : (v > 1 ? 1 : v)) : 0);
+                // The window's max is the live edge ("now"); map a player-time position (sec) to wall-clock,
+                // then to a fraction of the programme so the show fills the whole bar.
+                const wallFrac = t => clamp01((now - (bounds.max - t) * 1000 - programStartMs) / programDurMs);
                 // Track the pending seek target while scrubbing; fall back to the live playhead.
                 const current = (pendingSeekTime !== null) ? pendingSeekTime : playerManager.getCurrentTimeSec();
-                const playedFrac = clamp01((current - bounds.min) / dur);
-                // The buffer before the programme starts is a distinct colour. Map the programme start
-                // (epoch) to a fraction by treating the window's max as "now".
-                const showStartSec = bounds.max - (Date.now() - programStartMs) / 1000;
-                const showStartFrac = clamp01((showStartSec - bounds.min) / dur);
-                pbEarlier.style.width = (showStartFrac * 100) + '%';
-                pbPlayed.style.left = (showStartFrac * 100) + '%';
-                pbPlayed.style.width = (Math.max(0, playedFrac - showStartFrac) * 100) + '%';
-                pbLive.style.left = '100%';
+                const playedFrac = wallFrac(current);
+                const liveFrac = wallFrac(bounds.max);
+                // The DVR buffer only reaches back to the window start, so earlier parts of the show can no
+                // longer be rewound to; mark that floor in a distinct colour (0 when the show began inside it).
+                const seekFloorFrac = wallFrac(bounds.min);
+                pbEarlier.style.width = (seekFloorFrac * 100) + '%';
+                pbAired.style.left = (seekFloorFrac * 100) + '%';
+                pbAired.style.width = (Math.max(0, liveFrac - seekFloorFrac) * 100) + '%';
+                pbPlayed.style.left = (seekFloorFrac * 100) + '%';
+                pbPlayed.style.width = (Math.max(0, playedFrac - seekFloorFrac) * 100) + '%';
+                pbLive.style.left = (liveFrac * 100) + '%';
                 pbThumb.style.left = (playedFrac * 100) + '%';
                 programBar.classList.add('visible');
             } catch (e) {

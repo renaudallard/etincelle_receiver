@@ -31,6 +31,9 @@ the native Molotov streamer is unavailable.
   (e.g. the phone is away), it falls back to reloading the cached stream, backing
   off between attempts, and a reload resumes a replay where playback was. After
   repeated failures it stops and asks you to cast again rather than looping silently.
+- **Deep buffering** — replays, recordings, and VOD buffer well ahead, so a brief
+  network drop drains the buffer instead of stalling the show. Live is left small,
+  since it cannot buffer past the live edge.
 
 ### Remote controls
 

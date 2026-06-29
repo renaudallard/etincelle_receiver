@@ -1492,7 +1492,12 @@
                 playbackConfig.segmentRequestRetryLimit = 5;
                 playbackConfig.shakaConfig = {
                     streaming: {
-                        bufferingGoal: 30,
+                        // VOD/replay/recording buffers far ahead so a Chromecast-side network drop
+                        // drains the buffer instead of stalling the show. Shaka caps this to the MSE
+                        // quota, so a low-RAM Cast device simply buffers less rather than running out
+                        // of memory. Live stays small: it cannot buffer past the live edge, so a
+                        // larger goal would be wasted.
+                        bufferingGoal: streamIsLive ? 30 : 120,
                         rebufferingGoal: 15,
                         bufferBehind: 30,
                         alwaysStreamText: true,

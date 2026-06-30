@@ -411,9 +411,10 @@
         const SEEK_PREVIEW_LINGER = 800;
         // Holding the key auto-repeats keydown; each repeat in the same direction
         // grows the step, so a held button scrubs faster the longer it is held
-        // (capped). Distinct taps do not accelerate.
-        const SEEK_ACCEL_STEP = 0.6;
-        const SEEK_MAX_MULTIPLIER = 12;
+        // (capped). Distinct taps do not accelerate. The ramp is steep and the cap
+        // high so a held rewind crosses the 4h DVR window in a few seconds.
+        const SEEK_ACCEL_STEP = 1.5;
+        const SEEK_MAX_MULTIPLIER = 50;
         let pendingSeekTime = null;
         let seekCommitTimer = null;
         let hideSeekPreviewTimer = null;
@@ -422,6 +423,11 @@
         // The programme bar rides with the seek preview: shown only while actively scrubbing, not during
         // passive playback. True from the first seek key until the preview lingers out.
         let seekOverlayActive = false;
+        // A rewind stops at the current programme's start ("don't go before the current show"); the user
+        // breaks past it by pressing back again once parked there. holdShowStart re-arms once playback
+        // returns inside the show, so the next rewind stops at the start again.
+        let holdShowStart = true;
+        let showStartParked = false;
 
         // DOM Elements
         const controlMenu = document.getElementById('control-menu');
@@ -636,6 +642,21 @@
             return t;
         }
 
+        // The player-time position (sec) of the current programme's start, or null when there is no
+        // usable in-show floor. The window's max is the live edge ("now"), so the show began
+        // (now - programStartMs) ms before it. Mirrors the wall-clock mapping (and the same airing-now
+        // validity) the programme bar uses, so a stale programme (the cached window only refreshes on a
+        // new LOAD, not on rollover) or a not-yet-started one yields no floor; the result must also sit
+        // strictly inside the seekable window to be a usable floor.
+        function showStartTime(bounds) {
+            if (!(programStartMs > 0) || !(programEndMs > 0)) return null;
+            if (!bounds || bounds.max === null) return null;
+            const now = Date.now();
+            if (now < programStartMs || now > programEndMs) return null;
+            const t = bounds.max - (now - programStartMs) / 1000;
+            return (t > bounds.min && t < bounds.max) ? t : null;
+        }
+
         // Absolute seek in seconds, clamped to the current media bounds.
         function clampedSeek(target) {
             const bounds = getSeekBounds();
@@ -738,6 +759,10 @@
             }
             seekDir = direction;
 
+            // A fresh back press while parked at the show start releases the clamp ("really needed"),
+            // so the next rewind reaches the full DVR window behind the current programme.
+            if (direction < 0 && !isRepeat && showStartParked) holdShowStart = false;
+
             const multiplier = Math.min(
                 SEEK_MAX_MULTIPLIER, 1 + seekRepeat * SEEK_ACCEL_STEP
             );
@@ -745,7 +770,21 @@
             const base = (pendingSeekTime !== null)
                 ? pendingSeekTime
                 : playerManager.getCurrentTimeSec();
-            pendingSeekTime = clampBounds(base + deltaSec * multiplier, bounds);
+            // Hold a backward seek at the current programme's start unless the user has opted past it.
+            const showStart = showStartTime(bounds);
+            const floor = (holdShowStart && showStart !== null) ? showStart : bounds.min;
+            let target = clampBounds(base + deltaSec * multiplier, bounds);
+            if (target < floor) target = floor;
+            pendingSeekTime = target;
+
+            // Parked at the show start: arm the break-through and, on first arrival, say how to pass it.
+            const parked = holdShowStart && showStart !== null && target <= floor + 1;
+            if (parked && !showStartParked) {
+                showNotice('Start of show — press ◀ again to rewind further');
+            }
+            showStartParked = parked;
+            // Re-arm the clamp once playback is back inside the show, so a later rewind stops here again.
+            if (showStart !== null && target > showStart + 1) holdShowStart = true;
 
             renderSeekPreview(pendingSeekTime, bounds, multiplier);
             showSeekPreview();
@@ -789,6 +828,9 @@
             seekRepeat = 0;
             seekDir = 0;
             pendingSeekTime = null;
+            // A fresh stream starts with the show-start clamp armed again.
+            holdShowStart = true;
+            showStartParked = false;
             hideSeekPreview();
         }
 

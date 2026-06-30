@@ -39,17 +39,18 @@ the native Molotov streamer is unavailable.
 
 | Key | Action |
 |-----|--------|
-| **◄ / ►** | Rewind 10 s / forward 30 s. **Hold to accelerate** — the step grows the longer the button is held (capped); the preview shows the target position and the speed (×N). Repeated presses accumulate and commit as a single seek. On a live channel the seek stays within the available time-shift window. |
+| **◄ / ►** | Rewind 10 s / forward 30 s. **Hold to accelerate** — the step grows quickly the longer the button is held (capped high, so a held rewind crosses the 4 h time-shift window in a few seconds); the preview shows the target position and the speed (×N). Repeated presses accumulate and commit as a single seek. On a live channel a rewind **stops at the start of the current programme** so you do not overshoot into the previous show; once stopped there, press **◄** again to rewind further back into the time-shift window. |
 | **▼** | Open the menu (rewind, forward, restart, audio track, subtitles). |
 | **▲ / Back** | Close the menu. |
 | **OK** | Open the menu, or confirm the highlighted item. |
 | **Play/Pause** | Pause or resume playback. On a live channel, pausing drops behind the live edge into the time-shift window. |
 
 While you seek on a live channel, a thin bar at the bottom is scaled to the **current programme**: the
-part of the show up to the seek target is filled in, the live edge sits part-way along with the
-not-yet-aired remainder dimmer past it, a tick marks the live edge, and any stretch too old to rewind
-to is drawn in a distinct colour. The bar appears alongside the seek preview and clears once you stop
-seeking, so it never sits on screen during normal playback.
+bar's left edge is where the show begins, the part of the show up to the seek target is filled in, the
+live edge sits part-way along with the not-yet-aired remainder dimmer past it, a tick marks the live
+edge, and any stretch too old to rewind to is drawn in a distinct colour. A rewind stops at the left
+edge (the show start) unless you press **◄** again to go further back. The bar appears alongside the
+seek preview and clears once you stop seeking, so it never sits on screen during normal playback.
 
 ## Hosting
 

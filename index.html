@@ -258,7 +258,7 @@
         </div>
         <div class="menu-item" data-action="restart">
             <span class="icon">↺</span>
-            <span class="label">Restart</span>
+            <span class="label">Au début</span>
         </div>
         <div class="menu-item" data-action="audio">
             <span class="icon">🔊</span>
@@ -266,7 +266,7 @@
         </div>
         <div class="menu-item" data-action="subtitles">
             <span class="icon">💬</span>
-            <span class="label">Subtitles</span>
+            <span class="label">Sous-titres</span>
         </div>
     </div>
 
@@ -274,7 +274,7 @@
     <div id="track-submenu"></div>
 
     <!-- Menu Hint -->
-    <div id="menu-hint">Press ↓ for controls</div>
+    <div id="menu-hint">Appuyez sur ↓ pour les commandes</div>
 
     <!-- Transient notice -->
     <div id="notice"></div>
@@ -593,10 +593,10 @@
                     clampedSeek(0);
                     break;
                 case 'audio':
-                    if (!showTrackMenu('AUDIO')) showNotice('No audio tracks available');
+                    if (!showTrackMenu('AUDIO')) showNotice('Aucune piste audio disponible');
                     return; // Don't hide menu
                 case 'subtitles':
-                    if (!showTrackMenu('TEXT')) showNotice('No subtitles available');
+                    if (!showTrackMenu('TEXT')) showNotice('Aucun sous-titre disponible');
                     return; // Don't hide menu
             }
 
@@ -780,7 +780,7 @@
             // Parked at the show start: arm the break-through and, on first arrival, say how to pass it.
             const parked = holdShowStart && showStart !== null && target <= floor + 1;
             if (parked && !showStartParked) {
-                showNotice('Start of show — press ◀ again to rewind further');
+                showNotice('Début de l\'émission, appuyez encore sur ◀ pour reculer plus loin');
             }
             showStartParked = parked;
             // Re-arm the clamp once playback is back inside the show, so a later rewind stops here again.
@@ -911,7 +911,7 @@
             if (track.language) {
                 return LANG_NAMES[track.language] || track.language.toUpperCase();
             }
-            return track.name || 'Track ' + (index + 1);
+            return track.name || 'Piste ' + (index + 1);
         }
 
         // Open the submenu for the given track type ('AUDIO' or 'TEXT'). Text
@@ -927,7 +927,7 @@
             trackSelectedIndex = 0;
             trackOptions = [];
             // Subtitles can be turned off; audio always plays one track.
-            if (type === 'TEXT') trackOptions.push({ trackId: null, label: 'Off' });
+            if (type === 'TEXT') trackOptions.push({ trackId: null, label: 'Désactivés' });
             typeTracks.forEach((track, index) => {
                 trackOptions.push({
                     trackId: track.trackId,
@@ -1204,7 +1204,7 @@
             if (reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
                 console.warn('[Etincelle] Giving up after',
                     reconnectAttempts, 'reconnect attempts');
-                showNotice('Connection lost. Please cast again.', true);
+                showNotice('Connexion perdue. Relancez la diffusion.', true);
                 return;
             }
 
@@ -1229,7 +1229,7 @@
                 RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts)
             );
             reconnectAttempts++;
-            showNotice('Connection lost, reconnecting...');
+            showNotice('Connexion perdue, reconnexion...');
             reconnectTimer = setTimeout(() => {
                 console.log('[Etincelle] Reconnect attempt', reconnectAttempts);
                 // Fail the attempt if load() never settles, so a hung load cannot
@@ -1378,7 +1378,7 @@
             // and re-cast - a fresh LOAD cancels this via recoveryDone - and self-reconnect only as a
             // fallback if none arrives.
             if (recovering || userStopped || reconnectFallbackTimer !== null) return;
-            showNotice('Connection lost, reconnecting...');
+            showNotice('Connexion perdue, reconnexion...');
             reconnectFallbackTimer = setTimeout(() => {
                 reconnectFallbackTimer = null;
                 triggerReconnect();

@@ -382,10 +382,17 @@
         // so a reconnect cannot rely on it to tell live from VOD.
         let streamIsLive = false;
         // A rewound live cast (live_rewind_sec in the LOAD customData) asks us to resume this many
-        // seconds behind the live edge, applied once the seekable window is known.
+        // seconds behind the live edge, applied once playback has started (see applyPendingRewind).
         let pendingLiveRewindSec = 0;
         let rewindRetries = 0;
         let rewindRetryTimer = null;
+        // How often and how many times to check whether the rewind can be applied: playback can start
+        // well after the load completes (the DRM handshake alone can take ten seconds or more).
+        const REWIND_RETRY_INTERVAL = 300;
+        const REWIND_MAX_RETRIES = 100;
+        // Right after a load the player briefly reports PLAYING at the very start of its clock, before
+        // it joins the window; it has joined once the playhead is this far (s) past the window start.
+        const REWIND_JOIN_MARGIN = 5;
 
         // The on-screen programme's air-window (epoch ms) from the LOAD customData, so the live bar can
         // mark the current show. 0 when the sender gives no times; the bar then spans the window plain.
@@ -664,16 +671,19 @@
             playerManager.seek(clampBounds(target, bounds));
         }
 
-        // Resume a rewound live cast behind the live edge, once the seekable window is known. The
-        // range can lag load completion (a slow DRM handshake can take seconds), so retry for a while
-        // before giving up. The pending timer is tracked so a new LOAD can cancel a stale retry.
+        // Resume a rewound live cast behind the live edge, once playback has started and the seekable
+        // window is known. A seek made before playback starts is lost: the player then joins the live
+        // edge. Both can lag load completion, so retry for a while before giving up. The pending timer
+        // is tracked so a new LOAD can cancel a stale retry.
         function applyPendingRewind() {
             rewindRetryTimer = null;
             if (pendingLiveRewindSec <= 0) return;
             const bounds = getSeekBounds();
-            if (!bounds || bounds.max === null) {
-                if (rewindRetries++ < 30) {
-                    rewindRetryTimer = setTimeout(applyPendingRewind, 300);
+            const playing = playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING;
+            const joined = bounds && playerManager.getCurrentTimeSec() > bounds.min + REWIND_JOIN_MARGIN;
+            if (!bounds || bounds.max === null || !playing || !joined) {
+                if (rewindRetries++ < REWIND_MAX_RETRIES) {
+                    rewindRetryTimer = setTimeout(applyPendingRewind, REWIND_RETRY_INTERVAL);
                 } else {
                     pendingLiveRewindSec = 0;
                     rewindRetries = 0;

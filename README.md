@@ -13,6 +13,10 @@ the native Molotov streamer is unavailable.
 
 - **DRM** — reads `license_url` + `drm_token` from the cast `customData` and injects
   the `x-dt-auth-token` header on the Widevine license request (DRMtoday).
+- **Credentials kept off the network** — a Chromecast gives its media status, with
+  the `customData` of what plays, to any device of the local network that asks. The
+  receiver moves the credentials (`access_token`, `drm_token`, `profile_id`,
+  `user_id`) out of the request as it loads, so the status never carries them.
 - **French audio** — auto-selects the French (VF) track when available.
 - **Audio / subtitle tracks** — pick an audio track, or a subtitle track (or turn
   subtitles off), from the on-screen menu.

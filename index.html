@@ -361,6 +361,21 @@
         // the next genuine LOAD (a fresh cast).
         let userStopped = false;
 
+        // The account's credentials in a LOAD's customData. A Chromecast gives its media status, with
+        // the customData of what plays, to any device of the network that asks: they are moved out of
+        // the request into heldSecrets as it loads, so the status never carries them.
+        const SECRET_KEYS = ['access_token', 'refresh_token', 'drm_token', 'profile_id', 'user_id'];
+        let heldSecrets = {};
+        function takeSecrets(data) {
+            if (!data) return;
+            for (const key of SECRET_KEYS) {
+                if (key in data) {
+                    heldSecrets[key] = data[key];
+                    delete data[key];
+                }
+            }
+        }
+
         // Stall watchdog: a hung segment download can sit in BUFFERING forever
         // without firing an error, so reload when the media clock stops
         // advancing while playback should be progressing.
@@ -1499,7 +1514,17 @@
                 stalledFor = 0;
 
                 const media = loadRequestData.media;
-                const customData = media.customData || {};
+                // Keep the credentials here and out of what the status shows (see SECRET_KEYS). A
+                // reconnect reloads the request already stripped, and plays with the ones kept.
+                if (!isReconnect) heldSecrets = {};
+                takeSecrets(media.customData);
+                takeSecrets(loadRequestData.customData);
+                const queued = (loadRequestData.queueData && loadRequestData.queueData.items) || [];
+                for (const item of queued) {
+                    takeSecrets(item.customData);
+                    takeSecrets(item.media && item.media.customData);
+                }
+                const customData = Object.assign({}, media.customData, heldSecrets);
 
                 // Cache live/VOD for the reconnect path, which may run when
                 // getMediaInformation() is null.

@@ -1553,6 +1553,10 @@
                         rebufferingGoal: 15,
                         bufferBehind: 30,
                         alwaysStreamText: true,
+                        // Subtitles are streamed even when hidden, and a recording's text track can
+                        // end before its video (its last segments answer 404): without this, that
+                        // failure stops the video too, near the end of the recording, on every reload.
+                        ignoreTextStreamFailures: true,
                         retryParameters
                     },
                     manifest: { retryParameters },

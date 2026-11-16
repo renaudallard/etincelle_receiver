@@ -33,7 +33,9 @@ the native Molotov streamer is unavailable.
   repeated failures it stops and asks you to cast again rather than looping silently.
 - **Deep buffering** — replays, recordings, and VOD buffer well ahead, so a brief
   network drop drains the buffer instead of stalling the show. Live is left small,
-  since it cannot buffer past the live edge.
+  since it cannot buffer past the live edge. A subtitle track that fails (some
+  recordings' text track ends before the video) is dropped rather than stopping
+  playback.
 
 ### Remote controls
 

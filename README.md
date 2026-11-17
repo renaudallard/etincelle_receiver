@@ -67,11 +67,12 @@ seek preview and clears once you stop seeking, so it never sits on screen during
 
 ## Hosting
 
-The receiver must be served over **HTTPS**. The simplest option is **GitHub Pages**:
+The receiver must be served over **HTTPS**, from any host. One option is **GitHub Pages**
+on your own fork:
 
-1. In this repository's **Settings → Pages**, set the source to the `main` branch
-   (root folder). It is then served at
-   `https://renaudallard.github.io/etincelle_receiver/`.
+1. Fork this repository, then in the fork's **Settings → Pages** set the source to the
+   `main` branch (root folder). It is then served at
+   `https://<your-user>.github.io/etincelle_receiver/`.
 2. That URL is your **Receiver Application URL**.
 
 ## Registering with Google Cast

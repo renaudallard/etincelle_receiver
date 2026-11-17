@@ -27,6 +27,11 @@ the native Molotov streamer is unavailable.
 - **Live rewind hand-off** — when a live show is cast after rewinding into its
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and
   resumes that far behind the live edge instead of jumping to the live edge.
+- **Continue watching** — with `playhead_url`, `playhead_payload` and `access_token`
+  in the `customData`, the receiver posts the position to the Fubo playhead every
+  10 s and marks the item watched when it plays to its end. Given `credits_sec`,
+  where an episode's credits start, a position past it is posted as the full
+  duration, so an episode left in its credits counts as watched.
 - **Error notices** — surfaces playback errors briefly on screen instead of failing
   silently to a black screen.
 - **Self-recovery** — recovers from a playback failure or a stall without

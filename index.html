@@ -422,6 +422,8 @@
         let playheadPayload = null;
         let playheadHeaders = null;
         let playheadDurationSec = 0;
+        // Where the episode's credits start (s), once its next episode is announced; 0 when unknown.
+        let playheadCreditsSec = 0;
         let playheadLastSent = -1;
         let playheadTimer = null;
         let playheadInflight = false;
@@ -1318,6 +1320,11 @@
         // this origin, so a failed preflight or post must never affect playback.
         function reportPlayhead(offsetSec, force) {
             if (!playheadUrl || !Number.isFinite(offsetSec) || offsetSec <= 0) return;
+            // In the credits the episode counts as watched, as the official app reports it, so
+            // that continue watching does not offer it again a minute from its end.
+            if (playheadCreditsSec > 0 && playheadDurationSec > 0 && offsetSec >= playheadCreditsSec) {
+                offsetSec = playheadDurationSec;
+            }
             if (!force && offsetSec === playheadLastSent) return;
             // Skip a periodic report while a previous POST is still in flight, so a slow
             // backend cannot pile up overlapping requests. The terminal write passes
@@ -1345,7 +1352,8 @@
         }
 
         // Arm reporting from the LOAD customData. Needs the playhead url, its payload template and an
-        // access token; without any of them it stays disabled (e.g. the Home Assistant integration).
+        // access token; without any of them it stays disabled. credits_sec, when given, is where the
+        // episode's credits start.
         function setupPlayhead(customData) {
             stopPlayhead();
             playheadUrl = customData.playhead_url || null;
@@ -1366,6 +1374,8 @@
             if (customData.profile_id) playheadHeaders['X-Profile-Id'] = customData.profile_id;
             if (customData.user_id) playheadHeaders['X-User-Id'] = customData.user_id;
             playheadDurationSec = Math.floor(Number(playheadPayload.duration) || 0);
+            const credits = Math.floor(Number(customData.credits_sec));
+            playheadCreditsSec = credits > 0 ? credits : 0;
             playheadLastSent = -1;
             playheadTimer = setInterval(() => {
                 if (playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING) {

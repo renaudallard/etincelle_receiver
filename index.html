@@ -1643,6 +1643,47 @@
             }
         );
 
+        // The LOAD interceptor keeps the credentials out of what plays, but the framework builds the
+        // status from copies of the request it took before: the item being loaded (extendedStatus,
+        // while one stream replaces another) and the queue items still carried the DRM token to any
+        // device of the network. So nothing leaves with a credential in it, wherever it sits. The
+        // status is the framework's own, shared with what it plays from: it is copied, never changed.
+        function cloneOf(object) {
+            return Object.assign(Object.create(Object.getPrototypeOf(object)), object);
+        }
+        function withoutSecrets(data) {
+            if (!data || typeof data !== 'object' || !SECRET_KEYS.some(key => key in data)) return data;
+            const copy = cloneOf(data);
+            for (const key of SECRET_KEYS) delete copy[key];
+            return copy;
+        }
+        // A status, an extended status or a queue item, with no credential in its customData nor in
+        // that of its media.
+        function publishable(holder) {
+            if (!holder || typeof holder !== 'object') return holder;
+            const copy = cloneOf(holder);
+            if (holder.customData) copy.customData = withoutSecrets(holder.customData);
+            if (holder.media && holder.media.customData) {
+                copy.media = cloneOf(holder.media);
+                copy.media.customData = withoutSecrets(holder.media.customData);
+            }
+            return copy;
+        }
+        playerManager.setMessageInterceptor(
+            cast.framework.messages.MessageType.MEDIA_STATUS,
+            status => {
+                if (!status) return status;
+                const out = publishable(status);
+                if (status.extendedStatus) out.extendedStatus = publishable(status.extendedStatus);
+                if (Array.isArray(status.items)) out.items = status.items.map(publishable);
+                if (status.queueData && Array.isArray(status.queueData.items)) {
+                    out.queueData = cloneOf(status.queueData);
+                    out.queueData.items = status.queueData.items.map(publishable);
+                }
+                return out;
+            }
+        );
+
         // A STOP command (the remote's stop button, or a sender stop) ends casting: flag it so the
         // self-reconnect cannot heal playback back up, then tear the receiver down. The phone only
         // sends STOP when it is leaving this receiver, so this never fires on a normal channel change.

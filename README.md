@@ -16,7 +16,9 @@ the native Molotov streamer is unavailable.
 - **Credentials kept off the network** — a Chromecast gives its media status, with
   the `customData` of what plays, to any device of the local network that asks. The
   receiver moves the credentials (`access_token`, `drm_token`, `profile_id`,
-  `user_id`) out of the request as it loads, so the status never carries them.
+  `user_id`) out of the request as it loads, and strips them from every status it
+  sends, wherever the framework still holds a copy (the item being loaded, the
+  queue items), so the status never carries them.
 - **French audio** — auto-selects the French (VF) track when available.
 - **Audio / subtitle tracks** — pick an audio track, or a subtitle track (or turn
   subtitles off), from the on-screen menu.

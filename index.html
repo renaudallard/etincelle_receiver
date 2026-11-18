@@ -403,6 +403,10 @@
         // A rewound live cast (live_rewind_sec in the LOAD customData) asks us to resume this many
         // seconds behind the live edge, applied once playback has started (see applyPendingRewind).
         let pendingLiveRewindSec = 0;
+        // How far behind the live point a live stream was last seen playing (s), null when not known:
+        // where a reload of our own takes it back to. Closer than LIVE_POINT_SEC is the live point.
+        let liveBehindSec = null;
+        const LIVE_POINT_SEC = 30;
         let rewindRetries = 0;
         let rewindRetryTimer = null;
         // How often and how many times to check whether the rewind can be applied: playback can start
@@ -699,6 +703,14 @@
         // window is known. A seek made before playback starts is lost: the player then joins the live
         // edge. Both can lag load completion, so retry for a while before giving up. The pending timer
         // is tracked so a new LOAD can cancel a stale retry.
+        // Notes how far behind the live point playback is, when the player can tell.
+        function noteLiveBehind() {
+            const bounds = getSeekBounds();
+            const t = playerManager.getCurrentTimeSec();
+            if (!bounds || bounds.max === null || !Number.isFinite(t) || t <= bounds.min) return;
+            liveBehindSec = Math.max(0, bounds.max - t);
+        }
+
         function applyPendingRewind() {
             rewindRetryTimer = null;
             if (pendingLiveRewindSec <= 0) return;
@@ -1277,6 +1289,15 @@
                 const pos = playerManager.getCurrentTimeSec();
                 if (Number.isFinite(pos) && pos > 0) lastKnownPos = pos;
                 if (lastKnownPos > 0) lastLoadRequest.currentTime = lastKnownPos;
+            } else if (pendingLiveRewindSec <= 0 && lastLoadRequest.media && lastLoadRequest.media.customData) {
+                // A live stream comes back as far behind the live point as it was being watched, or
+                // at it: the rewind the cast was started with is stale after a seek, a return to the
+                // live point or a pause, and would send the viewer somewhere else.
+                noteLiveBehind();
+                if (liveBehindSec !== null) {
+                    lastLoadRequest.media.customData.live_rewind_sec =
+                        liveBehindSec > LIVE_POINT_SEC ? Math.round(liveBehindSec) : 0;
+                }
             }
 
             const delay = Math.min(
@@ -1505,6 +1526,9 @@
             // Remember the position while playing so a reconnect can resume here
             // even if the clock is gone by then. Live rejoins the edge instead.
             if (!streamIsLive && Number.isFinite(t) && t > 0) lastKnownPos = t;
+            // Not while the rewind asked for at the cast is still to be applied: the stream then
+            // plays at the live point for a moment, which is not where it is watched.
+            if (streamIsLive && pendingLiveRewindSec <= 0) noteLiveBehind();
             // Any change in the media clock, forward or a backward seek, means
             // playback is not frozen. Only an unchanged clock is a real stall;
             // tracking the max instead would count a rewind as a stall.
@@ -1552,6 +1576,7 @@
                     // Drop the previous stream's resume position so a new cast
                     // does not inherit it.
                     lastKnownPos = 0;
+                    liveBehindSec = null;
                 }
                 // Reset the stall watchdog for the new stream.
                 lastMediaTime = -1;

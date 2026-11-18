@@ -493,9 +493,12 @@
         // The receiver otherwise fails to a black screen with no indication of
         // what went wrong, so surface playback errors and similar conditions.
         let hideNoticeTimer = null;
+        // The notice on screen is one of the recovery's own, for it to take down when playback is back.
+        let noticeOfRecovery = false;
         // A persistent notice (the terminal "cast again" message) stays up until
         // something replaces or clears it; a transient one auto-hides.
-        function showNotice(message, persistent) {
+        function showNotice(message, persistent, ofRecovery) {
+            noticeOfRecovery = !!ofRecovery;
             notice.textContent = message;
             notice.classList.add('visible');
             clearTimeout(hideNoticeTimer);
@@ -1312,7 +1315,7 @@
             if (reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
                 console.warn('[Etincelle] Giving up after',
                     reconnectAttempts, 'reconnect attempts');
-                showNotice('Connexion perdue. Relancez la diffusion.', true);
+                showNotice('Connexion perdue. Relancez la diffusion.', true, true);
                 return;
             }
 
@@ -1347,7 +1350,7 @@
                 RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts)
             );
             reconnectAttempts++;
-            showNotice('Connexion perdue, reconnexion...');
+            showNotice('Connexion perdue, reconnexion...', false, true);
             reconnectTimer = setTimeout(() => {
                 console.log('[Etincelle] Reconnect attempt', reconnectAttempts);
                 // Fail the attempt if load() never settles, so a hung load cannot
@@ -1390,7 +1393,9 @@
             reconnectGeneration++;
             reconnectAttempts = 0;
             recovering = false;
-            hideNotice();
+            // Its own notices only: playback getting going again after a seek must not wipe what was
+            // just said about that seek.
+            if (noticeOfRecovery) hideNotice();
         }
 
         // A user-initiated stop or exit (remote STOP command, or back/exit with no menu open) must end
@@ -1520,7 +1525,7 @@
             // and re-cast - a fresh LOAD cancels this via recoveryDone - and self-reconnect only as a
             // fallback if none arrives.
             if (recovering || userStopped || reconnectFallbackTimer !== null) return;
-            showNotice('Connexion perdue, reconnexion...');
+            showNotice('Connexion perdue, reconnexion...', false, true);
             const clockAtError = playerManager.getCurrentTimeSec();
             reconnectFallbackTimer = setTimeout(() => {
                 reconnectFallbackTimer = null;
@@ -1531,7 +1536,7 @@
                 const playsOn = playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING
                     && Number.isFinite(clock) && clock !== clockAtError;
                 if (playsOn) {
-                    hideNotice();
+                    if (noticeOfRecovery) hideNotice();
                     return;
                 }
                 triggerReconnect();

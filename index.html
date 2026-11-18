@@ -403,6 +403,11 @@
         // A rewound live cast (live_rewind_sec in the LOAD customData) asks us to resume this many
         // seconds behind the live edge, applied once playback has started (see applyPendingRewind).
         let pendingLiveRewindSec = 0;
+        // A live stream was loaded and has not been seen to join the live point yet (see
+        // applyPendingRewind), and for how many of its looks it has been playing at the window start.
+        let liveJoinPending = false;
+        let parkedTicks = 0;
+        const PARKED_MAX_TICKS = 34;
         // How far behind the live point a live stream was last seen playing (s), null when not known:
         // where a reload of our own takes it back to. Closer than LIVE_POINT_SEC is the live point.
         let liveBehindSec = null;
@@ -412,7 +417,7 @@
         // How often and how many times to check whether the rewind can be applied: playback can start
         // well after the load completes (the DRM handshake alone can take ten seconds or more).
         const REWIND_RETRY_INTERVAL = 300;
-        const REWIND_MAX_RETRIES = 100;
+        const REWIND_MAX_RETRIES = 400;
         // Right after a load the player briefly reports PLAYING at the very start of its clock, before
         // it joins the window; it has joined once the playhead is this far (s) past the window start.
         const REWIND_JOIN_MARGIN = 5;
@@ -715,22 +720,37 @@
 
         function applyPendingRewind() {
             rewindRetryTimer = null;
-            if (pendingLiveRewindSec <= 0) return;
+            if (!liveJoinPending) return;
             const bounds = getSeekBounds();
             const playing = playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING;
-            const joined = bounds && playerManager.getCurrentTimeSec() > bounds.min + REWIND_JOIN_MARGIN;
-            if (!bounds || bounds.max === null || !playing || !joined) {
-                if (rewindRetries++ < REWIND_MAX_RETRIES) {
-                    rewindRetryTimer = setTimeout(applyPendingRewind, REWIND_RETRY_INTERVAL);
-                } else {
-                    pendingLiveRewindSec = 0;
-                    rewindRetries = 0;
+            const ready = !!bounds && bounds.max !== null && playing;
+            const joined = ready && playerManager.getCurrentTimeSec() > bounds.min + REWIND_JOIN_MARGIN;
+            if (!joined) {
+                // Playing, and still at the start of its window after ten seconds: the jump to the live
+                // point is not coming, and nothing else would ever move it from there, four hours back.
+                const parked = ready && ++parkedTicks >= PARKED_MAX_TICKS;
+                if (!parked) {
+                    if (rewindRetries++ < REWIND_MAX_RETRIES) {
+                        rewindRetryTimer = setTimeout(applyPendingRewind, REWIND_RETRY_INTERVAL);
+                    } else {
+                        endLiveJoin();
+                    }
+                    return;
                 }
-                return;
             }
-            playerManager.seek(clampBounds(bounds.max - pendingLiveRewindSec, bounds));
+            // Joined, to the rewind the cast asked for; or found parked, to that rewind or to the live
+            // point itself.
+            if (pendingLiveRewindSec > 0 || !joined) {
+                playerManager.seek(clampBounds(bounds.max - pendingLiveRewindSec, bounds));
+            }
+            endLiveJoin();
+        }
+
+        function endLiveJoin() {
+            liveJoinPending = false;
             pendingLiveRewindSec = 0;
             rewindRetries = 0;
+            parkedTicks = 0;
         }
 
         function formatTime(totalSec) {
@@ -1291,7 +1311,7 @@
                 const pos = playerManager.getCurrentTimeSec();
                 if (Number.isFinite(pos) && pos > 0) lastKnownPos = pos;
                 if (lastKnownPos > 0) lastLoadRequest.currentTime = lastKnownPos;
-            } else if (pendingLiveRewindSec <= 0 && lastLoadRequest.media && lastLoadRequest.media.customData) {
+            } else if (!liveJoinPending && lastLoadRequest.media && lastLoadRequest.media.customData) {
                 // A live stream comes back as far behind the live point as it was being watched, or
                 // at it: the rewind the cast was started with is stale after a seek, a return to the
                 // live point or a pause, and would send the viewer somewhere else.
@@ -1553,7 +1573,7 @@
                 // by the length of its stall, which is not a rewind to come back to. Nor while the
                 // rewind asked for at the cast is still to be applied: the stream then plays at the
                 // live point for a moment, which is not where it is watched.
-                if (streamIsLive && pendingLiveRewindSec <= 0) noteLiveBehind();
+                if (streamIsLive && !liveJoinPending) noteLiveBehind();
                 return;
             }
             stalledFor += STALL_CHECK_INTERVAL;
@@ -1632,6 +1652,8 @@
                 }
                 pendingLiveRewindSec = (streamIsLive && customData.live_rewind_sec > 0)
                     ? customData.live_rewind_sec : 0;
+                liveJoinPending = streamIsLive;
+                parkedTicks = 0;
                 rewindRetries = 0;
 
                 // The programme air-window for the live bar; live only, 0 when not supplied.

@@ -1133,6 +1133,12 @@
         function handleKeyDown(event) {
             const action = normalizeKey(event);
             if (!action) return;
+            // A key held down repeats: fine for moving about, not for what acts. OK held would open the
+            // menu and run its first entry again and again, Back held close the menu then end the cast.
+            if (event.repeat && (action === 'enter' || action === 'back' || action === 'playpause')) {
+                event.preventDefault();
+                return;
+            }
 
             switch (action) {
                 case 'down':

@@ -320,6 +320,10 @@
         let userSelectedAudio = false;
         let userAudioLanguage = null;
         let userAudioTrackId = null;
+        // The same for the subtitles, whose choice may be none (a null track id).
+        let userSelectedText = false;
+        let userTextLanguage = null;
+        let userTextTrackId = null;
         // Set once the control hint has been shown, so it appears only on the
         // first load and not on every channel change.
         let hintShown = false;
@@ -1026,6 +1030,10 @@
                     userSelectedAudio = true;
                     userAudioLanguage = option.language;
                     userAudioTrackId = option.trackId;
+                } else {
+                    userSelectedText = true;
+                    userTextLanguage = option.language;
+                    userTextTrackId = option.trackId;
                 }
                 console.log('[Etincelle] ' + trackMenuType
                     + ' track changed to:', option.trackId);
@@ -1167,6 +1175,20 @@
             if (target && !activeIds.includes(target.trackId)) {
                 setActiveTrackOfType('AUDIO', target.trackId);
             }
+        }
+
+        // The same for the subtitles chosen, or turned off, which a reload starts without again.
+        function reapplyUserText() {
+            if (!userSelectedText) return;
+            const textTracks = tracksOfType('TEXT');
+            const activeIds = activeTrackIdsOfType('TEXT');
+            if (userTextTrackId === null || userTextTrackId === undefined) {
+                if (textTracks.some(t => activeIds.includes(t.trackId))) setActiveTrackOfType('TEXT', null);
+                return;
+            }
+            let target = textTracks.find(t => t.trackId === userTextTrackId);
+            if (!target && userTextLanguage) target = textTracks.find(t => t.language === userTextLanguage);
+            if (target && !activeIds.includes(target.trackId)) setActiveTrackOfType('TEXT', target.trackId);
         }
 
         function forceFrenchAudio() {
@@ -1393,6 +1415,8 @@
         // Event Listeners
         playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
             forceFrenchAudio();
+            // Once per load, not at each change of the tracks: a choice made from a phone since must stand.
+            reapplyUserText();
             applyPendingRewind();
             // Show the hint briefly, but only on the first load of the session.
             if (!hintShown) {
@@ -1516,6 +1540,9 @@
                     userSelectedAudio = false;
                     userAudioLanguage = null;
                     userAudioTrackId = null;
+                    userSelectedText = false;
+                    userTextLanguage = null;
+                    userTextTrackId = null;
                     // A genuine new cast re-enables the self-reconnect after an earlier user stop.
                     userStopped = false;
                     // Drop any recovery still pending for the previous stream: cancel its

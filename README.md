@@ -30,7 +30,9 @@ the native Molotov streamer is unavailable.
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and
   resumes that far behind the live edge instead of jumping to the live edge. A
   reload of its own later comes back as far behind as the stream was then being
-  watched, not to that first rewind.
+  watched, not to that first rewind. A live stream found still playing at the
+  start of its window ten seconds in, where it stands for a moment while loading,
+  is taken to where the cast asked: its rewind, or the live point.
 - **Continue watching** — with `playhead_url`, `playhead_payload` and `access_token`
   in the `customData`, the receiver posts the position to the Fubo playhead (an
   https address on fubo.tv or molotov.tv, any other is left unused) every
@@ -47,6 +49,8 @@ the native Molotov streamer is unavailable.
   (e.g. the phone is away), it falls back to reloading the cached stream, backing
   off between attempts, and a reload resumes a replay where playback was. After
   repeated failures it stops and asks you to cast again rather than looping silently.
+  An error the stream plays on through is left alone, and a stream that has not
+  played yet gets 45 s before a stall counts, as its licence alone can take ten.
 - **Deep buffering** — replays, recordings, and VOD buffer well ahead, so a brief
   network drop drains the buffer instead of stalling the show. Live is left small,
   since it cannot buffer past the live edge. A subtitle track that fails (some

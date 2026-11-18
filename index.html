@@ -634,7 +634,15 @@
                 case 'restart': {
                     // The start of the programme on a live stream, whose own start is hours before it.
                     const showStart = showStartTime(getSeekBounds());
-                    clampedSeek(showStart !== null ? showStart : 0);
+                    if (showStart !== null) {
+                        clampedSeek(showStart);
+                    } else if (streamIsLive) {
+                        // Its start is not known, or the programme the cast began on has ended: 0 would
+                        // be the start of the window, four hours back.
+                        showNotice('Début du programme inconnu');
+                    } else {
+                        clampedSeek(0);
+                    }
                     break;
                 }
                 case 'audio':

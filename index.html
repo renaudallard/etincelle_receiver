@@ -1507,8 +1507,19 @@
             // fallback if none arrives.
             if (recovering || userStopped || reconnectFallbackTimer !== null) return;
             showNotice('Connexion perdue, reconnexion...');
+            const clockAtError = playerManager.getCurrentTimeSec();
             reconnectFallbackTimer = setTimeout(() => {
                 reconnectFallbackTimer = null;
+                // An error the stream plays on through (a request of a sender refused, an image that
+                // did not load) is no lost stream, and nothing would then say that playback is back:
+                // reloading would cut it, with an address and a token that may be stale by now.
+                const clock = playerManager.getCurrentTimeSec();
+                const playsOn = playerManager.getPlayerState() === cast.framework.messages.PlayerState.PLAYING
+                    && Number.isFinite(clock) && clock !== clockAtError;
+                if (playsOn) {
+                    hideNotice();
+                    return;
+                }
                 triggerReconnect();
             }, RESOLVE_GRACE_MS);
         });

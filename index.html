@@ -1443,13 +1443,14 @@
                 stopCasting();
             }
             // Do not stop the timer here: it self-gates on PLAYING, so a replay/restart in the same
-            // session resumes reporting without a fresh LOAD. It is cleared on the next LOAD or on
-            // sender disconnect.
+            // session resumes reporting without a fresh LOAD. It is cleared on the next LOAD or as the
+            // receiver shuts down.
         });
 
-        // Stop the playhead timer when the last sender disconnects or the receiver shuts down; the
-        // self-gating interval would otherwise keep ticking until the page is torn down.
-        context.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, stopPlayhead);
+        // Stop the playhead timer when the receiver shuts down. Not when a sender disconnects: that
+        // is said for each one, the phone that cast as it loses its Wi-Fi for a moment included, and
+        // what plays goes on without it. Only a LOAD starts the timer again, so the resume point would
+        // stay where it was for the rest of the programme.
         context.addEventListener(cast.framework.system.EventType.SHUTDOWN, stopPlayhead);
 
         // Refresh the live programme bar while it is on screen during a seek; it self-gates off otherwise.

@@ -408,6 +408,8 @@
         let liveJoinPending = false;
         let parkedTicks = 0;
         const PARKED_MAX_TICKS = 34;
+        // The rewind a reload of our own is to come back to, null when it has none to say.
+        let reloadLiveRewindSec = null;
         // How far behind the live point a live stream was last seen playing (s), null when not known:
         // where a reload of our own takes it back to. Closer than LIVE_POINT_SEC is the live point.
         let liveBehindSec = null;
@@ -1318,8 +1320,8 @@
                 // A stream in pause stands still while the live point moves on: where it stands now.
                 if (playerManager.getPlayerState() === cast.framework.messages.PlayerState.PAUSED) noteLiveBehind();
                 if (liveBehindSec !== null) {
-                    lastLoadRequest.media.customData.live_rewind_sec =
-                        liveBehindSec > LIVE_POINT_SEC ? Math.round(liveBehindSec) : 0;
+                    reloadLiveRewindSec = liveBehindSec > LIVE_POINT_SEC ? Math.round(liveBehindSec) : 0;
+                    lastLoadRequest.media.customData.live_rewind_sec = reloadLiveRewindSec;
                 }
             }
 
@@ -1650,8 +1652,12 @@
                     clearTimeout(rewindRetryTimer);
                     rewindRetryTimer = null;
                 }
-                pendingLiveRewindSec = (streamIsLive && customData.live_rewind_sec > 0)
-                    ? customData.live_rewind_sec : 0;
+                // A reload of our own says where it comes back to; kept apart from the request, which
+                // the framework may hand back as a copy.
+                const rewindAsked = (isReconnect && reloadLiveRewindSec !== null)
+                    ? reloadLiveRewindSec : customData.live_rewind_sec;
+                reloadLiveRewindSec = null;
+                pendingLiveRewindSec = (streamIsLive && rewindAsked > 0) ? rewindAsked : 0;
                 liveJoinPending = streamIsLive;
                 parkedTicks = 0;
                 rewindRetries = 0;

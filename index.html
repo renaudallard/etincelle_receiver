@@ -1293,7 +1293,8 @@
                 // A live stream comes back as far behind the live point as it was being watched, or
                 // at it: the rewind the cast was started with is stale after a seek, a return to the
                 // live point or a pause, and would send the viewer somewhere else.
-                noteLiveBehind();
+                // A stream in pause stands still while the live point moves on: where it stands now.
+                if (playerManager.getPlayerState() === cast.framework.messages.PlayerState.PAUSED) noteLiveBehind();
                 if (liveBehindSec !== null) {
                     lastLoadRequest.media.customData.live_rewind_sec =
                         liveBehindSec > LIVE_POINT_SEC ? Math.round(liveBehindSec) : 0;
@@ -1540,15 +1541,17 @@
             // Remember the position while playing so a reconnect can resume here
             // even if the clock is gone by then. Live rejoins the edge instead.
             if (!streamIsLive && Number.isFinite(t) && t > 0) lastKnownPos = t;
-            // Not while the rewind asked for at the cast is still to be applied: the stream then
-            // plays at the live point for a moment, which is not where it is watched.
-            if (streamIsLive && pendingLiveRewindSec <= 0) noteLiveBehind();
             // Any change in the media clock, forward or a backward seek, means
             // playback is not frozen. Only an unchanged clock is a real stall;
             // tracking the max instead would count a rewind as a stall.
             if (Number.isFinite(t) && t !== lastMediaTime) {
                 lastMediaTime = t;
                 stalledFor = 0;
+                // Only while the clock moves: a stream that has frozen falls behind the live point
+                // by the length of its stall, which is not a rewind to come back to. Nor while the
+                // rewind asked for at the cast is still to be applied: the stream then plays at the
+                // live point for a moment, which is not where it is watched.
+                if (streamIsLive && pendingLiveRewindSec <= 0) noteLiveBehind();
                 return;
             }
             stalledFor += STALL_CHECK_INTERVAL;

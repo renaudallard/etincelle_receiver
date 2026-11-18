@@ -385,6 +385,9 @@
         // advancing while playback should be progressing.
         const STALL_CHECK_INTERVAL = 5000;
         const STALL_TIMEOUT = 15000;
+        const STARTUP_STALL_TIMEOUT = 45000;
+        // The stream loaded last has got as far as playing.
+        let playedSinceLoad = false;
         // -1 is a value the media clock never reports, so the first observation
         // always re-baselines instead of looking like a stall.
         let lastMediaTime = -1;
@@ -1512,6 +1515,7 @@
 
         // Clear the backoff once playback is actually running again.
         playerManager.addEventListener(cast.framework.events.EventType.PLAYING, recoveryDone);
+        playerManager.addEventListener(cast.framework.events.EventType.PLAYING, () => { playedSinceLoad = true; });
 
         // When the item plays through to the end on the TV, mark it watched on the server.
         playerManager.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, event => {
@@ -1579,7 +1583,9 @@
                 return;
             }
             stalledFor += STALL_CHECK_INTERVAL;
-            if (stalledFor >= STALL_TIMEOUT) {
+            // A stream that has not played yet is given longer: its licence alone can take ten seconds
+            // or more, and a reload then starts that over, each attempt back at the window's start.
+            if (stalledFor >= (playedSinceLoad ? STALL_TIMEOUT : STARTUP_STALL_TIMEOUT)) {
                 console.warn('[Etincelle] Playback stalled; reloading');
                 stalledFor = 0;
                 triggerReconnect();
@@ -1660,6 +1666,7 @@
                 pendingLiveRewindSec = (streamIsLive && rewindAsked > 0) ? rewindAsked : 0;
                 liveJoinPending = streamIsLive;
                 parkedTicks = 0;
+                playedSinceLoad = false;
                 rewindRetries = 0;
 
                 // The programme air-window for the live bar; live only, 0 when not supplied.

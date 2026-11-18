@@ -28,9 +28,12 @@ the native Molotov streamer is unavailable.
   a remote (Chromecast with Google TV, Android TV).
 - **Live rewind hand-off** — when a live show is cast after rewinding into its
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and
-  resumes that far behind the live edge instead of jumping to the live edge.
+  resumes that far behind the live edge instead of jumping to the live edge. A
+  reload of its own later comes back as far behind as the stream was then being
+  watched, not to that first rewind.
 - **Continue watching** — with `playhead_url`, `playhead_payload` and `access_token`
-  in the `customData`, the receiver posts the position to the Fubo playhead every
+  in the `customData`, the receiver posts the position to the Fubo playhead (an
+  https address on fubo.tv or molotov.tv, any other is left unused) every
   10 s and marks the item watched when it plays to its end. Given `credits_sec`,
   where an episode's credits start, a position past it is posted as the full
   duration, so an episode left in its credits counts as watched.

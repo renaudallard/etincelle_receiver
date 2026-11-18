@@ -18,8 +18,9 @@ the native Molotov streamer is unavailable.
   receiver moves the credentials (`access_token`, `drm_token`, `profile_id`,
   `user_id`) out of the request as it loads, and strips them from every status it
   sends, wherever the framework still holds a copy (the item being loaded, the
-  queue items), and from the queue items it gives when asked for them, so neither
-  carries them. The stream's own URL, which the status names, is not one of them.
+  queue items), so the status never carries them. The stream's own URL, which the
+  status names, is not one of them, and neither is the answer to a request for the
+  queue's items, which the framework does not let a receiver look at.
 - **French audio** — auto-selects the French (VF) track when available.
 - **Audio / subtitle tracks** — pick an audio track, or a subtitle track (or turn
   subtitles off), from the on-screen menu.

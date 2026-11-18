@@ -1728,18 +1728,6 @@
             }
         );
 
-        // The items of the queue are also given to whoever asks for them by id, with the customData
-        // they were loaded with.
-        playerManager.setMessageInterceptor(
-            cast.framework.messages.MessageType.QUEUE_ITEMS,
-            info => {
-                if (!info || !Array.isArray(info.items)) return info;
-                const out = cloneOf(info);
-                out.items = info.items.map(publishable);
-                return out;
-            }
-        );
-
         // A STOP command (the remote's stop button, or a sender stop) ends casting: flag it so the
         // self-reconnect cannot heal playback back up, then tear the receiver down. The phone only
         // sends STOP when it is leaving this receiver, so this never fires on a normal channel change.

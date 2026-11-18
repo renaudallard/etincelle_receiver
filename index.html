@@ -707,7 +707,9 @@
         function noteLiveBehind() {
             const bounds = getSeekBounds();
             const t = playerManager.getCurrentTimeSec();
-            if (!bounds || bounds.max === null || !Number.isFinite(t) || t <= bounds.min) return;
+            // Not at the start of the window, where a stream being loaded plays for a moment before it
+            // joins the live point: that would read as a rewind of the whole window.
+            if (!bounds || bounds.max === null || !Number.isFinite(t) || t <= bounds.min + REWIND_JOIN_MARGIN) return;
             liveBehindSec = Math.max(0, bounds.max - t);
         }
 

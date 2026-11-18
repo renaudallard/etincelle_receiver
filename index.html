@@ -613,9 +613,12 @@
                 case 'forward':
                     clampedSeek(currentTime + SEEK_STEP_FWD);
                     break;
-                case 'restart':
-                    clampedSeek(0);
+                case 'restart': {
+                    // The start of the programme on a live stream, whose own start is hours before it.
+                    const showStart = showStartTime(getSeekBounds());
+                    clampedSeek(showStart !== null ? showStart : 0);
                     break;
+                }
                 case 'audio':
                     if (!showTrackMenu('AUDIO')) showNotice('Aucune piste audio disponible');
                     return; // Don't hide menu
@@ -799,13 +802,16 @@
                 : playerManager.getCurrentTimeSec();
             // Hold a backward seek at the current programme's start unless the user has opted past it.
             const showStart = showStartTime(bounds);
-            const floor = (holdShowStart && showStart !== null) ? showStart : bounds.min;
+            // Only from within the programme: before its start already, the hold would send any
+            // press, forward ones too, up to that start.
+            const holding = holdShowStart && showStart !== null && base >= showStart;
+            const floor = holding ? showStart : bounds.min;
             let target = clampBounds(base + deltaSec * multiplier, bounds);
             if (target < floor) target = floor;
             pendingSeekTime = target;
 
             // Parked at the show start: arm the break-through and, on first arrival, say how to pass it.
-            const parked = holdShowStart && showStart !== null && target <= floor + 1;
+            const parked = holding && target <= floor + 1;
             if (parked && !showStartParked) {
                 showNotice('Début de l\'émission, appuyez encore sur ◀ pour reculer plus loin');
             }

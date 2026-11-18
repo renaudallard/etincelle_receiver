@@ -1400,12 +1400,26 @@
             }
         }
 
+        // An https address on one of the service's own hosts.
+        function isServiceUrl(url) {
+            try {
+                const u = new URL(url);
+                const host = u.hostname.toLowerCase();
+                return u.protocol === 'https:' && ['fubo.tv', 'molotov.tv'].some(
+                    (domain) => host === domain || host.endsWith('.' + domain));
+            } catch (e) {
+                return false;
+            }
+        }
+
         // Arm reporting from the LOAD customData. Needs the playhead url, its payload template and an
         // access token; without any of them it stays disabled. credits_sec, when given, is where the
         // episode's credits start.
         function setupPlayhead(customData) {
             stopPlayhead();
             playheadUrl = customData.playhead_url || null;
+            // Only to the service itself: each report carries the account's token.
+            if (playheadUrl && !isServiceUrl(playheadUrl)) playheadUrl = null;
             playheadPayload = customData.playhead_payload || null;
             const token = customData.access_token;
             if (!playheadUrl || !playheadPayload || !token) {

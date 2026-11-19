@@ -1515,6 +1515,8 @@
             // A recording has no more strips of thumbnails, nor caption segments.
             const MAX_STRIPS = 150;
             const MAX_SEGMENTS = 10000;
+            // What is asked of the network and does not come is given up on after this long.
+            const TIMEOUT_MS = 20000;
             // Pictures are read at half their size, which the logo survives.
             const PICTURE_WIDTH = 240;
             const PICTURE_HEIGHT = 135;
@@ -1525,9 +1527,11 @@
             let live = false;
             let manifestUrl = null;
             let thumbnailsUrl = null;
-            // A recording's breaks, as [start, end] in its own time; the search's outcome for the status.
+            // A recording's breaks, as [start, end] in its own time; the search's outcome for the status;
+            // and the search still to be made, once the recording plays.
             let recorded = [];
             let recordedState = 'none';
+            let wanted = null;
             const known = new Map();
             // A live channel's: marked by its manifest and found by its logo, in seconds since 1970.
             let marked = [];
@@ -1539,7 +1543,8 @@
             let learntAt = -Infinity;
             let scores = new Map();
             let missed = new Map();
-            let looking = false;
+            // The stream a look is under way for; 0 when none is.
+            let looking = 0;
             let lookedAt = 0;
             // Where the skip on offer leads, in media time; null when none is.
             let offered = null;
@@ -1559,14 +1564,20 @@
                     manifestUrl = url || null;
                     const thumbs = customData && customData.live_thumbnails_url;
                     thumbnailsUrl = (nowLive && typeof thumbs === 'string' && thumbs.indexOf('https://') === 0) ? thumbs.replace(/\/+$/, '') : null;
-                    // The same stream loaded again, as after a break in the connection: all is kept.
-                    if (newKey !== null && newKey === key && nowLive === live) return;
+                    // Only what the sender says is a recording is searched: a replay has no adverts.
+                    const record = !nowLive && !!(customData && customData.recording) && newKey !== null;
+                    // The same stream loaded again, as after a break in the connection: all is kept,
+                    // but a search that failed is made again.
+                    if (newKey !== null && newKey === key && nowLive === live) {
+                        if (record && /^error/.test(recordedState)) wanted = { url: manifestUrl, name: key, mine: playing };
+                        return;
+                    }
                     playing++;
                     key = newKey;
                     live = nowLive;
                     offered = null;
                     recorded = [];
-                    recordedState = 'none';
+                    recordedState = record ? 'waiting' : 'none';
                     marked = [];
                     markedAt = 0;
                     markedState = 'none';
@@ -1576,7 +1587,8 @@
                     learntAt = -Infinity;
                     scores = new Map();
                     missed = new Map();
-                    if (!live && key !== null) searchRecording(manifestUrl, key, playing);
+                    // Once it plays (see tick): its start is not to be slowed by the search.
+                    wanted = record ? { url: manifestUrl, name: key, mine: playing } : null;
                 } catch (e) {
                     recordedState = 'error';
                 }
@@ -1598,17 +1610,29 @@
             }
 
             async function text(url) {
-                const response = await fetch(url, { credentials: 'omit' });
-                if (!response.ok) throw new Error('http ' + response.status);
-                return response.text();
+                const abort = new AbortController();
+                const timer = setTimeout(() => abort.abort(), TIMEOUT_MS);
+                try {
+                    const response = await fetch(url, { credentials: 'omit', signal: abort.signal });
+                    if (!response.ok) throw new Error('http ' + response.status);
+                    return await response.text();
+                } finally {
+                    clearTimeout(timer);
+                }
             }
 
             // The image at url drawn width by height, as its pixels (RGBA); null when it cannot be had.
             function pixels(url, width, height) {
                 return new Promise(resolve => {
                     const image = new Image();
+                    const timer = setTimeout(() => {
+                        image.onload = null;
+                        image.onerror = null;
+                        resolve(null);
+                    }, TIMEOUT_MS);
                     image.crossOrigin = 'anonymous';
                     image.onload = () => {
+                        clearTimeout(timer);
                         try {
                             if (canvas === null) canvas = document.createElement('canvas');
                             if (canvas.width !== width || canvas.height !== height) {
@@ -1622,7 +1646,10 @@
                             resolve(null);
                         }
                     };
-                    image.onerror = () => resolve(null);
+                    image.onerror = () => {
+                        clearTimeout(timer);
+                        resolve(null);
+                    };
                     image.src = url;
                 });
             }
@@ -1667,19 +1694,30 @@
                 if (!media) return [];
                 const scale = Number(template.getAttribute('timescale') || 1);
                 const offset = Number(template.getAttribute('presentationTimeOffset') || 0);
+                // $Time$ or $Number$, which may ask for a width, as $Number%05d$.
+                const put = (template_, name, value) => template_.replace(new RegExp('\\$' + name + '(?:%0(\\d+)d)?\\$', 'g'),
+                    (whole, width) => (width ? String(value).padStart(Number(width), '0') : String(value)));
                 const address = (time, number) => new URL(
-                    media.split('$RepresentationID$').join(representation.getAttribute('id'))
-                        .split('$Time$').join(String(time)).split('$Number$').join(String(number)), base).href;
+                    put(put(media.split('$RepresentationID$').join(representation.getAttribute('id')), 'Time', time), 'Number', number), base).href;
                 const out = [];
                 const timeline = children(template, 'SegmentTimeline')[0];
                 if (timeline) {
                     let time = 0;
                     let number = Number(template.getAttribute('startNumber') || 1);
-                    for (const s of children(timeline, 'S')) {
+                    const entries = children(timeline, 'S');
+                    for (let e = 0; e < entries.length; e++) {
+                        const s = entries[e];
                         if (s.getAttribute('t') !== null) time = Number(s.getAttribute('t'));
                         const length = Number(s.getAttribute('d'));
-                        const repeat = Number(s.getAttribute('r') || 0);
-                        if (!(length > 0) || !(repeat >= 0)) return [];
+                        let repeat = Number(s.getAttribute('r') || 0);
+                        if (!(length > 0)) return [];
+                        if (repeat < 0) {
+                            // Repeated to the next entry, or to the end of the recording.
+                            const next = e + 1 < entries.length ? entries[e + 1].getAttribute('t') : null;
+                            const until = next !== null ? Number(next) : total * scale + offset;
+                            repeat = Math.ceil((until - time) / length) - 1;
+                        }
+                        if (!(repeat >= 0)) return [];
                         for (let k = 0; k <= repeat; k++) {
                             out.push({ time: (time - offset) / scale, duration: length / scale, url: address(time, number) });
                             time += length;
@@ -1712,11 +1750,13 @@
 
             // The breaks the captions of a recording give away; null when they say nothing. Throws
             // when too many could not be read.
-            async function captionsOf(segments) {
+            async function captionsOf(segments, mine) {
                 if (segments.length === 0) return null;
                 const paragraph = /<p\b[^>]*>([\s\S]*?)<\/p>/g;
                 let unread = 0;
                 const spoken = await each(segments, 4, async segment => {
+                    // Another stream was loaded meanwhile: nothing more is asked for this one.
+                    if (mine !== playing) return true;
                     try {
                         const body = await text(segment.url);
                         let m;
@@ -1731,6 +1771,7 @@
                         return true;
                     }
                 });
+                if (mine !== playing) throw new Error('superseded');
                 if (unread * 20 > spoken.length) throw new Error('captions unread');
                 return AdRule.captionBreaks(spoken, segments[0].time, segments[0].duration);
             }
@@ -1791,7 +1832,7 @@
                         const mime = set.getAttribute('mimeType') || (representation && representation.getAttribute('mimeType')) || '';
                         const kind = set.getAttribute('contentType') || mime.split('/')[0];
                         if (kind === 'text' && captions === null) {
-                            captions = await captionsOf(segmentsOf(set, base, total));
+                            captions = await captionsOf(segmentsOf(set, base, total), mine);
                         } else if (kind === 'image' && logoBreaks === null) {
                             const tiles = children(set, 'EssentialProperty').concat(representation ? children(representation, 'EssentialProperty') : [])
                                 .filter(p => /thumbnail_tile$/.test(p.getAttribute('schemeIdUri') || ''))[0];
@@ -1825,21 +1866,25 @@
                     }
                     const periods = children(mpd, 'Period');
                     const starts = periods.map(p => seconds(p.getAttribute('start')));
+                    let previous = null;
                     const stretches = periods.map((period, i) => {
-                        const start = zero + (isFinite(starts[i]) ? starts[i] : 0);
+                        // A period that does not say where it starts follows the one before.
+                        const start = isFinite(starts[i]) ? zero + starts[i] : (previous !== null ? previous : zero);
                         const length = seconds(period.getAttribute('duration'));
                         const end = isFinite(length) ? start + length : (i + 1 < starts.length && isFinite(starts[i + 1]) ? zero + starts[i + 1] : null);
                         const streams = children(period, 'EventStream').filter(s => (s.getAttribute('schemeIdUri') || '').indexOf('urn:scte:scte35') === 0);
                         const marks = [];
                         for (const stream of streams) {
                             const scale = Number(stream.getAttribute('timescale') || 1);
+                            const from = Number(stream.getAttribute('presentationTimeOffset') || 0);
                             for (const event of children(stream, 'Event')) {
                                 const opens = AdRule.opens(new XMLSerializer().serializeToString(event));
                                 if (opens === null) continue;
                                 const length_ = Number(event.getAttribute('duration') || 0) / scale;
-                                marks.push({ at: start + Number(event.getAttribute('presentationTime') || 0) / scale, duration: length_ > 0 ? length_ : null, opens });
+                                marks.push({ at: start + (Number(event.getAttribute('presentationTime') || 0) - from) / scale, duration: length_ > 0 ? length_ : null, opens });
                             }
                         }
+                        previous = end;
                         return { start, end, marks, signalled: streams.length > 0 };
                     });
                     marked = AdRule.markedBreaks(stretches);
@@ -1870,7 +1915,7 @@
                 });
             }
 
-            async function learn(at, last) {
+            async function learn(at, last, mine) {
                 learntAt = at;
                 logo = null;
                 scores = new Map();
@@ -1881,6 +1926,8 @@
                     const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
                     return data === null ? null : lumaOf(data, PICTURE_WIDTH, 0);
                 })).filter(p => p !== null);
+                // Another stream was loaded meanwhile: what was learnt is not its logo.
+                if (mine !== playing) return;
                 const track = AdRule.track(pictures.length, PICTURE_WIDTH, PICTURE_HEIGHT);
                 pictures.forEach((picture, i) => track.add(i, picture));
                 logo = pictures.length > 0 ? track.logo() : null;
@@ -1904,7 +1951,7 @@
                 const at = Math.floor(atSeconds / STEP_S) * STEP_S;
                 const last = Math.floor((liveAt - NOT_YET_S) / STEP_S) * STEP_S;
                 if (at > last) return;
-                if (Math.abs(at - learntAt) > LEARN_AGAIN_S) await learn(at, last);
+                if (Math.abs(at - learntAt) > LEARN_AGAIN_S) await learn(at, last, mine);
                 if (logo === null || mine !== playing) return;
                 await readPictures(at - BACK_S, Math.min(last, at + AHEAD_S));
                 for (let more = 0; more < MORE_TIMES; more++) {
@@ -1940,8 +1987,8 @@
             }
 
             async function lookLive(mine) {
-                if (looking) return;
-                looking = true;
+                if (looking === mine) return;
+                looking = mine;
                 try {
                     const times = liveTimes();
                     // Only behind the live point: at it there is nowhere to skip to.
@@ -1954,7 +2001,7 @@
                 } catch (e) {
                     logoState = 'error: ' + String(e && e.message).slice(0, 40);
                 } finally {
-                    looking = false;
+                    if (looking === mine) looking = 0;
                 }
             }
 
@@ -1966,15 +2013,22 @@
                     const states = cast.framework.messages.PlayerState;
                     if (key !== null && (state === states.PLAYING || state === states.PAUSED)) {
                         const now = playerManager.getCurrentTimeSec();
+                        if (wanted !== null && state === states.PLAYING) {
+                            const search = wanted;
+                            wanted = null;
+                            if (search.mine === playing) searchRecording(search.url, search.name, search.mine);
+                        }
                         if (!live) {
                             const inside = recorded.filter(b => now >= b[0] && now < b[1] - LAST_MOMENT_S)[0];
                             if (inside) end = inside[1];
-                        } else {
+                        } else if (!liveJoinPending) {
+                            // Not while the stream is still joining the live point: it stands at the start
+                            // of its window then, which is no place it is watched from.
                             const times = liveTimes();
                             if (times !== null) {
-                                // What the manifest marks and what the logo finds, as one where they touch.
-                                const breaks = AdRule.merge(marked.concat(found), 0);
-                                const inside = breaks.filter(b => times.at >= b[0] && times.at < b[1] - LAST_MOMENT_S && b[1] <= times.end - LIVE_MARGIN_S)[0];
+                                // What the manifest marks is exact, and comes first; then what the logo finds.
+                                const here = b => times.at >= b[0] && times.at < b[1] - LAST_MOMENT_S && b[1] <= times.end - LIVE_MARGIN_S;
+                                const inside = marked.filter(here)[0] || found.filter(here)[0];
                                 if (inside) {
                                     const target = playerManager.getMediaTimeForAbsoluteTime(inside[1]);
                                     if (typeof target === 'number' && isFinite(target) && target > now) end = target;
@@ -1999,6 +2053,8 @@
                 const target = offered;
                 offered = null;
                 pill.classList.remove('visible');
+                // A seek being stepped with the arrows would land after this one, back in the adverts.
+                cancelPendingSeek();
                 clampedSeek(target);
                 return true;
             }

@@ -34,9 +34,10 @@ the native Molotov streamer is unavailable.
   sits in a corner through the programme and is gone during the adverts, looked
   for in the pictures the service keeps of each channel (their address comes in
   the `customData` as `live_thumbnails_url`; without it only marked breaks are
-  found); and in a recording, from its thumbnail strips the same way and from
-  its captions. Nothing is skipped unasked, and nothing is offered at the live
-  point. The status carries what the search is at as `customData.ad_skip`, with
+  found); and in a recording (what the sender says is one, with `recording` in
+  the `customData`), from its thumbnail strips the same way and from its
+  captions, once it plays. Nothing is skipped unasked, and nothing is offered at
+  the live point. The status carries what the search is at as `customData.ad_skip`, with
   no address in it.
 - **Live rewind hand-off** — when a live show is cast after rewinding into its
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and

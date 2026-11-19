@@ -636,9 +636,11 @@
                     break;
                 case 'restart': {
                     // The start of the programme on a live stream, whose own start is hours before it.
-                    const showStart = showStartTime(getSeekBounds());
-                    if (showStart !== null) {
-                        clampedSeek(showStart);
+                    // One on air since before the window began goes as far back as the window does.
+                    const bounds = getSeekBounds();
+                    const began = showBeganAt(bounds);
+                    if (began !== null && began < bounds.max) {
+                        clampedSeek(began);
                     } else if (streamIsLive) {
                         // Its start is not known, or the programme the cast began on has ended: 0 would
                         // be the start of the window, four hours back.
@@ -705,12 +707,18 @@
         // new LOAD, not on rollover) or a not-yet-started one yields no floor; the result must also sit
         // strictly inside the seekable window to be a usable floor.
         function showStartTime(bounds) {
+            const t = showBeganAt(bounds);
+            return (t !== null && t > bounds.min && t < bounds.max) ? t : null;
+        }
+
+        // The media time the programme on air began at, which is before the seekable window for one
+        // on air for longer than the window is; null when it is not known.
+        function showBeganAt(bounds) {
             if (!(programStartMs > 0) || !(programEndMs > 0)) return null;
             if (!bounds || bounds.max === null) return null;
             const now = Date.now();
             if (now < programStartMs || now > programEndMs) return null;
-            const t = bounds.max - (now - programStartMs) / 1000;
-            return (t > bounds.min && t < bounds.max) ? t : null;
+            return bounds.max - (now - programStartMs) / 1000;
         }
 
         // Absolute seek in seconds, clamped to the current media bounds.

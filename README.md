@@ -26,6 +26,18 @@ the native Molotov streamer is unavailable.
   subtitles off), from the on-screen menu.
 - **Remote controls** — an on-screen menu and direct D-pad seeking for devices with
   a remote (Chromecast with Google TV, Android TV).
+- **Skip ads** — while playback is in an ad break whose end is known, a
+  "Passer la pub : OK" pill is shown and **OK** jumps to the break's end. The
+  receiver finds the breaks itself, with the rules of the etincelle apps: what a
+  live stream marks (SCTE-35 in its manifest, or the shape of its periods), read
+  from the manifest every half minute; what it does not mark, from the logo that
+  sits in a corner through the programme and is gone during the adverts, looked
+  for in the pictures the service keeps of each channel (their address comes in
+  the `customData` as `live_thumbnails_url`; without it only marked breaks are
+  found); and in a recording, from its thumbnail strips the same way and from
+  its captions. Nothing is skipped unasked, and nothing is offered at the live
+  point. The status carries what the search is at as `customData.ad_skip`, with
+  no address in it.
 - **Live rewind hand-off** — when a live show is cast after rewinding into its
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and
   resumes that far behind the live edge instead of jumping to the live edge. A
@@ -64,7 +76,7 @@ the native Molotov streamer is unavailable.
 | **◄ / ►** | Rewind 10 s / forward 30 s. **Hold to accelerate** — the step grows quickly the longer the button is held (capped high, so a held rewind crosses the 4 h time-shift window in a few seconds); the preview shows the target position and the speed (×N). Repeated presses accumulate and commit as a single seek. On a live channel a rewind **stops at the start of the current programme** so you do not overshoot into the previous show; once stopped there, press **◄** again to rewind further back into the time-shift window. |
 | **▼** | Open the menu (rewind, forward, restart, audio track, subtitles). |
 | **▲ / Back** | Close the menu. |
-| **OK** | Open the menu, or confirm the highlighted item. |
+| **OK** | Skip the ad break when the pill offers it; otherwise open the menu, or confirm the highlighted item. |
 | **Play/Pause** | Pause or resume playback. On a live channel, pausing drops behind the live edge into the time-shift window. |
 
 While you seek on a live channel, a thin bar at the bottom is scaled to the **current programme**: the

@@ -1157,6 +1157,8 @@
             const CORNER = 0.22;
             const MASK = 0.92;
             const STRONG = 25;
+            // How many of the corners, the first ones, are the upper ones.
+            const UPPER = 2;
             // Marked breaks this close are one; and the shape of a break on a stream that marks
             // nothing but cuts itself at each one: a jingle between two stretches of adverts.
             const MERGE_GAP_S = 10;
@@ -1307,6 +1309,9 @@
                     const counts = new Int32Array(256);
                     let kept = null;
                     for (let c = 0; c < edges.length; c++) {
+                        // A channel's own logo is in an upper corner; a lower one holds a show's, or a
+                        // banner, there less of the time: looked at only when no upper one has a logo.
+                        if (c === UPPER && kept !== null && kept.strength >= STRONG) break;
                         const corner = edges[c];
                         const median = new Uint8Array(size);
                         for (let p = 0; p < size; p++) {

@@ -31,7 +31,8 @@ the native Molotov streamer is unavailable.
   receiver finds the breaks itself, with the rules of the etincelle apps: what a
   live stream marks (SCTE-35 in its manifest, or the shape of its periods), read
   from the manifest every half minute; what it does not mark, from the logo that
-  sits in a corner through the programme and is gone during the adverts, looked
+  sits in a corner through the programme (the channel's, in an upper corner,
+  before a show's own lower down) and is gone during the adverts, looked
   for in the pictures the service keeps of each channel (their address comes in
   the `customData` as `live_thumbnails_url`; without it only marked breaks are
   found); and in a recording (what the sender says is one, with `recording` in

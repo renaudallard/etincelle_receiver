@@ -1128,8 +1128,10 @@
         // Skipping ad breaks. The rules are those of the etincelle apps (their BreakGuess and AdBreaks),
         // with times in seconds: what a stream marks of its breaks is read from its manifest; what it
         // does not is guessed, from the logo that sits in a corner of the picture through the programme
-        // and is gone during the adverts, and in a recording from its captions too (a programme speaks
-        // for minutes, an advert for seconds). All of it is offered with a pill, never skipped unasked.
+        // and is gone during the adverts (the channel's, in an upper corner, first; a picture with a
+        // show's own, lower down, is the programme's too), and in a recording from its captions too
+        // (a programme speaks for minutes, an advert for seconds). All of it is offered with a pill,
+        // never skipped unasked.
         const AdRule = (() => {
             // A break lasts between these: under, it is a pause or a scene without a word; over, the
             // end of one programme and the start of another.
@@ -1230,8 +1232,9 @@
                 return out;
             }
 
-            // The stretches without the logo that have the programme on both sides, as [start, end].
-            function logoBreaks(flags, first, step) {
+            // The stretches without the logo that have the programme on both sides and last what a
+            // break does, as [first, last] pictures.
+            function breakRuns(flags, step) {
                 const firm = solid(flags);
                 const programme = (from, to) => {
                     if (from < 0 || to > firm.length) return false;
@@ -1239,14 +1242,24 @@
                     for (let i = from; i < to; i++) if (!firm[i]) with_++;
                     return with_ >= MOSTLY;
                 };
-                const out = [];
-                for (const r of runs(firm, BRIDGE)) {
-                    const start = first + r[0] * step;
-                    const end = first + (r[1] + 1) * step;
+                return runs(firm, BRIDGE).filter(r => {
+                    const length = (r[1] + 1 - r[0]) * step;
                     const between = programme(r[0] - AROUND, r[0]) && programme(r[1] + 1, r[1] + 1 + AROUND);
-                    if (between && end - start >= MIN_S && end - start <= MAX_S) out.push([start, end]);
+                    return between && length >= MIN_S && length <= MAX_S;
+                });
+            }
+
+            // Those stretches as [start, end]. With a second logo, lowerFlags tells of each picture
+            // whether it is without that one: a break is then what is left of one once the pictures
+            // that show the second logo are taken for the programme's.
+            function logoBreaks(flags, first, step, lowerFlags) {
+                let found = breakRuns(flags, step);
+                if (lowerFlags) {
+                    const both = new Array(flags.length).fill(false);
+                    for (const r of found) for (let i = r[0]; i <= r[1]; i++) both[i] = flags[i] && lowerFlags[i];
+                    found = breakRuns(both, step);
                 }
-                return out;
+                return found.map(r => [first + r[0] * step, first + (r[1] + 1) * step]);
             }
 
             // What captions and logo agree on; either is null when it had nothing to go by.
@@ -1303,44 +1316,43 @@
                     given[index] = true;
                 }
 
-                // The corner that holds the logo, its points that are the logo with what each mostly
-                // is, and what each picture given has of it. Null when no corner holds anything that stays.
-                function learn() {
-                    const read = [];
-                    for (let i = 0; i < count; i++) if (given[i]) read.push(i);
-                    if (size <= 0 || read.length < 2 * AROUND) return null;
-                    const counts = new Int32Array(256);
-                    let kept = null;
-                    for (let c = 0; c < edges.length; c++) {
-                        // A channel's own logo is in an upper corner; a lower one holds a show's, or a
-                        // banner, there less of the time: looked at only when no upper one has a logo.
-                        if (found >= 0 && c !== found) continue;
-                        if (found < 0 && c === UPPER && kept !== null && kept.strength >= STRONG) break;
-                        const corner = edges[c];
-                        const median = new Uint8Array(size);
-                        for (let p = 0; p < size; p++) {
-                            counts.fill(0);
-                            for (const i of read) counts[corner[i * size + p]]++;
-                            let below = 0;
-                            let value = 0;
-                            while (below + counts[value] <= (read.length >> 1)) below += counts[value++];
-                            median[p] = value;
-                        }
-                        const cut = Math.max(1, Array.from(median).sort((a, b) => a - b)[Math.floor(size * MASK)]);
-                        const mask = [];
-                        let sum = 0;
-                        for (let p = 0; p < size; p++) {
-                            if (median[p] >= cut) {
-                                mask.push(p);
-                                sum += median[p];
-                            }
-                        }
-                        if (mask.length === 0) continue;
-                        const strength = sum / mask.length;
-                        if (kept === null || strength > kept.strength) kept = { corner: c, median, mask, strength, whole: sum };
+                // What stays put in corner c through the pictures read: its points that are a logo,
+                // what each mostly is, and how much they stand out. Null when nothing stays.
+                function cornerOf(c, read, counts) {
+                    const corner = edges[c];
+                    const median = new Uint8Array(size);
+                    for (let p = 0; p < size; p++) {
+                        counts.fill(0);
+                        for (const i of read) counts[corner[i * size + p]]++;
+                        let below = 0;
+                        let value = 0;
+                        while (below + counts[value] <= (read.length >> 1)) below += counts[value++];
+                        median[p] = value;
                     }
-                    if (kept === null || (found < 0 && kept.strength < STRONG)) return null;
-                    found = kept.corner;
+                    const cut = Math.max(1, Array.from(median).sort((a, b) => a - b)[Math.floor(size * MASK)]);
+                    const mask = [];
+                    let sum = 0;
+                    for (let p = 0; p < size; p++) {
+                        if (median[p] >= cut) {
+                            mask.push(p);
+                            sum += median[p];
+                        }
+                    }
+                    return mask.length === 0 ? null : { corner: c, median, mask, strength: sum / mask.length, whole: sum };
+                }
+
+                // The strongest of the corners from to below to.
+                function strongest(from, to, read, counts) {
+                    let kept = null;
+                    for (let c = from; c < to; c++) {
+                        const one = cornerOf(c, read, counts);
+                        if (one !== null && (kept === null || one.strength > kept.strength)) kept = one;
+                    }
+                    return kept;
+                }
+
+                // What each picture read has of the logo kept, and what they mostly have.
+                function scored(kept, read) {
                     const corner = edges[kept.corner];
                     const score = new Float64Array(count);
                     const seen = [];
@@ -1357,10 +1369,26 @@
                     return kept;
                 }
 
-                // The logo of the pictures given, to look for in others: see score().
-                function logo() {
-                    const learnt = learn();
-                    if (learnt === null) return null;
+                // The logo: the channel's, in an upper corner, when there is one, with the show's own
+                // (lower) beside it; a lower corner alone when no upper one holds a logo. With what
+                // each picture given has of it. Null when no corner holds anything that stays.
+                function learn() {
+                    const read = [];
+                    for (let i = 0; i < count; i++) if (given[i]) read.push(i);
+                    if (size <= 0 || read.length < 2 * AROUND) return null;
+                    const counts = new Int32Array(256);
+                    const strong = one => one !== null && one.strength >= STRONG ? one : null;
+                    const lower = strongest(UPPER, edges.length, read, counts);
+                    const upper = found < 0 ? strong(strongest(0, UPPER, read, counts)) : found < UPPER ? cornerOf(found, read, counts) : null;
+                    const kept = upper !== null ? upper : found < 0 ? strong(lower) : cornerOf(found, read, counts);
+                    if (kept === null) return null;
+                    found = kept.corner;
+                    scored(kept, read);
+                    kept.lower = upper !== null && strong(lower) !== null ? scored(lower, read) : null;
+                    return kept;
+                }
+
+                function logoOf(learnt) {
                     const left = origins[learnt.corner][0];
                     const top = origins[learnt.corner][1];
                     return {
@@ -1370,7 +1398,15 @@
                         whole: learnt.whole,
                         usual: learnt.usual,
                         strength: learnt.strength,
+                        // A show's own logo, lower down, found beside this one, the channel's.
+                        lower: learnt.lower ? logoOf(learnt.lower) : null,
                     };
+                }
+
+                // The logo of the pictures given, to look for in others: see score().
+                function logo() {
+                    const learnt = learn();
+                    return learnt === null ? null : logoOf(learnt);
                 }
 
                 // Of each picture, whether it was given and is without the logo; null as for logo().
@@ -1384,8 +1420,10 @@
                     logo,
                     gone: flags,
                     breaks: (first, step) => {
-                        const without = flags();
-                        return without === null ? null : logoBreaks(without, first, step);
+                        const learnt = learn();
+                        if (learnt === null) return null;
+                        const lowerFlags = learnt.lower ? gone(learnt.lower.score, learnt.lower.usual, given) : null;
+                        return logoBreaks(gone(learnt.score, learnt.usual, given), first, step, lowerFlags);
                     },
                 };
             }
@@ -1552,6 +1590,8 @@
             let logoState = 'none';
             let learntAt = -Infinity;
             let scores = new Map();
+            // The same of the show's own logo, when one was learnt beside the channel's.
+            let lowerScores = new Map();
             let missed = new Map();
             // The stream a look is under way for; 0 when none is.
             let looking = 0;
@@ -1596,6 +1636,7 @@
                     logoState = 'none';
                     learntAt = -Infinity;
                     scores = new Map();
+                    lowerScores = new Map();
                     missed = new Map();
                     // Once it plays (see tick): its start is not to be slowed by the search.
                     wanted = record ? { url: manifestUrl, name: key, mine: playing } : null;
@@ -1914,14 +1955,17 @@
                 const mine = logo;
                 const got = await each(wanted, 4, async time => {
                     const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
-                    return data === null ? null : AdRule.score(mine, lumaOf(data, PICTURE_WIDTH, 0));
+                    if (data === null) return null;
+                    const luma = lumaOf(data, PICTURE_WIDTH, 0);
+                    return [AdRule.score(mine, luma), mine.lower ? AdRule.score(mine.lower, luma) : null];
                 });
                 if (mine !== logo) return;
                 wanted.forEach((time, i) => {
                     // One that cannot be had counts as showing the logo, and is asked for again.
                     if (got[i] === null) missed.set(time, (missed.get(time) || 0) + 1);
                     else missed.delete(time);
-                    scores.set(time, got[i] === null ? mine.usual : got[i]);
+                    scores.set(time, got[i] === null ? mine.usual : got[i][0]);
+                    if (mine.lower) lowerScores.set(time, got[i] === null ? mine.lower.usual : got[i][1]);
                 });
             }
 
@@ -1929,6 +1973,7 @@
                 learntAt = at;
                 logo = null;
                 scores = new Map();
+                lowerScores = new Map();
                 missed = new Map();
                 const times = [];
                 for (let time = at - LEARN_SPAN_S; time <= Math.min(last, at + LEARN_SPAN_S); time += LEARN_EVERY_S) times.push(time);
@@ -1941,7 +1986,8 @@
                 const track = AdRule.track(pictures.length, PICTURE_WIDTH, PICTURE_HEIGHT);
                 pictures.forEach((picture, i) => track.add(i, picture));
                 logo = pictures.length > 0 ? track.logo() : null;
-                logoState = logo === null ? 'none in ' + pictures.length + ' pictures' : 'strength ' + Math.round(logo.strength);
+                logoState = logo === null ? 'none in ' + pictures.length + ' pictures'
+                    : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '');
                 if (logo === null) learntAt = at - LEARN_AGAIN_S + LEARN_RETRY_S;
             }
 
@@ -1951,8 +1997,17 @@
                 let first = at;
                 while (scores.has(first - STEP_S)) first -= STEP_S;
                 const score = [];
-                for (let time = first; scores.has(time); time += STEP_S) score.push(scores.get(time));
-                return { first, gone: AdRule.gone(score, logo.usual, score.map(() => true)) };
+                const lower = [];
+                for (let time = first; scores.has(time); time += STEP_S) {
+                    score.push(scores.get(time));
+                    if (logo.lower) lower.push(lowerScores.has(time) ? lowerScores.get(time) : logo.lower.usual);
+                }
+                const all = score.map(() => true);
+                return {
+                    first,
+                    gone: AdRule.gone(score, logo.usual, all),
+                    lowerGone: logo.lower ? AdRule.gone(lower, logo.lower.usual, all) : null,
+                };
             }
 
             // The breaks the logo gives away around the playhead, at seconds since 1970 with the
@@ -1978,8 +2033,9 @@
                 }
                 if (mine !== playing || logo === null || !scores.has(at)) return;
                 const around = knownAround(at);
-                found = AdRule.logoBreaks(around.gone, around.first, STEP_S);
+                found = AdRule.logoBreaks(around.gone, around.first, STEP_S, around.lowerGone);
                 for (const time of Array.from(scores.keys())) if (time < at - KEPT_S) scores.delete(time);
+                for (const time of Array.from(lowerScores.keys())) if (time < at - KEPT_S) lowerScores.delete(time);
                 for (const time of Array.from(missed.keys())) if (time < at - KEPT_S) missed.delete(time);
             }
 

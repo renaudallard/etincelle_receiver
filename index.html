@@ -1154,6 +1154,9 @@
             const BRIDGE = 7;
             const AROUND = 15;
             const MOSTLY = 8;
+            // The pictures a piece at either end of a break must last to stay part of it when only
+            // the bridge holds it there.
+            const END_PIECE = 10;
             // The share of a picture a corner takes, of a corner's points that are the logo, and the
             // least a logo's edges must stand out.
             const CORNER = 0.22;
@@ -1253,13 +1256,25 @@
             // whether it is without that one: a break is then what is left of one once the pictures
             // that show the second logo are taken for the programme's.
             function logoBreaks(flags, first, step, lowerFlags) {
-                let found = breakRuns(flags, step);
+                let without = flags;
+                let found = breakRuns(without, step);
                 if (lowerFlags) {
-                    const both = new Array(flags.length).fill(false);
-                    for (const r of found) for (let i = r[0]; i <= r[1]; i++) both[i] = flags[i] && lowerFlags[i];
-                    found = breakRuns(both, step);
+                    without = new Array(flags.length).fill(false);
+                    for (const r of found) for (let i = r[0]; i <= r[1]; i++) without[i] = flags[i] && lowerFlags[i];
+                    found = breakRuns(without, step);
                 }
-                return found.map(r => [first + r[0] * step, first + (r[1] + 1) * step]);
+                const firm = solid(without);
+                return found.map(r => {
+                    // A short piece held to either end by the bridge is given up: the logo hidden for
+                    // a moment just after a break, or before one, is a bright scene of the programme
+                    // more often than a last advert, and the break would run into it.
+                    const pieces = runs(firm.slice(r[0], r[1] + 1), 0);
+                    let from = 0;
+                    let to = pieces.length - 1;
+                    while (to > from && pieces[to][1] - pieces[to][0] + 1 < END_PIECE) to--;
+                    while (from < to && pieces[from][1] - pieces[from][0] + 1 < END_PIECE) from++;
+                    return [first + (r[0] + pieces[from][0]) * step, first + (r[0] + pieces[to][1] + 1) * step];
+                });
             }
 
             // What captions and logo agree on; either is null when it had nothing to go by.

@@ -33,7 +33,9 @@ the native Molotov streamer is unavailable.
   from the manifest every half minute; what it does not mark, from the logo that
   sits in a corner through the programme (the channel's, in an upper corner,
   before a show's own lower down, though a picture with the show's is the
-  programme's too) and is gone during the adverts, looked
+  programme's too) and is gone during the adverts (such a guess ends half a
+  minute before the logo is back, which channels put up again after the
+  programme: the last adverts are left in), looked
   for in the pictures the service keeps of each channel (their address comes in
   the `customData` as `live_thumbnails_url`; without it only marked breaks are
   found); and in a recording (what the sender says is one, with `recording` in

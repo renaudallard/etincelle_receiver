@@ -1279,6 +1279,9 @@
                 const origins = [[0, 0], [width - cornerWidth, 0], [0, height - cornerHeight], [width - cornerWidth, height - cornerHeight]];
                 const edges = origins.map(() => new Uint8Array(size > 0 ? count * size : 0));
                 const given = new Array(count).fill(false);
+                // The corner the logo was found in, kept for what is learnt again once more pictures
+                // are given: those wanted next were told from that corner.
+                let found = -1;
 
                 // Picture index, as its luma row by row.
                 function add(index, luma) {
@@ -1311,7 +1314,8 @@
                     for (let c = 0; c < edges.length; c++) {
                         // A channel's own logo is in an upper corner; a lower one holds a show's, or a
                         // banner, there less of the time: looked at only when no upper one has a logo.
-                        if (c === UPPER && kept !== null && kept.strength >= STRONG) break;
+                        if (found >= 0 && c !== found) continue;
+                        if (found < 0 && c === UPPER && kept !== null && kept.strength >= STRONG) break;
                         const corner = edges[c];
                         const median = new Uint8Array(size);
                         for (let p = 0; p < size; p++) {
@@ -1335,7 +1339,8 @@
                         const strength = sum / mask.length;
                         if (kept === null || strength > kept.strength) kept = { corner: c, median, mask, strength, whole: sum };
                     }
-                    if (kept === null || kept.strength < STRONG) return null;
+                    if (kept === null || (found < 0 && kept.strength < STRONG)) return null;
+                    found = kept.corner;
                     const corner = edges[kept.corner];
                     const score = new Float64Array(count);
                     const seen = [];

@@ -2913,7 +2913,11 @@
                 const out = publishable(status);
                 // What the search for ad breaks is at, for whoever looks into a cast that will not skip.
                 try {
-                    out.customData = Object.assign({}, out.customData, { ad_skip: adSkip.report() });
+                    out.customData = Object.assign({}, out.customData, {
+                        ad_skip: adSkip.report(),
+                        // The programme the live bar is scaled to, as the sender gave it (epoch ms, 0 when none).
+                        programme: { start: programStartMs, end: programEndMs }
+                    });
                 } catch (e) {
                     // The status goes without it.
                 }

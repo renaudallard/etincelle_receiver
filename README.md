@@ -90,6 +90,7 @@ live edge sits part-way along with the not-yet-aired remainder dimmer past it, a
 edge, and any stretch too old to rewind to is drawn in a distinct colour. A rewind stops at the left
 edge (the show start) unless you press **◄** again to go further back. The bar appears alongside the
 seek preview and clears once you stop seeking, so it never sits on screen during normal playback.
+The status carries the programme the bar is scaled to as `customData.programme` (start and end).
 
 ## Hosting
 

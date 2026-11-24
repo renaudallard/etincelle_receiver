@@ -1134,9 +1134,13 @@
         // never skipped unasked.
         const AdRule = (() => {
             // A break lasts between these: under, it is a pause or a scene without a word; over, the
-            // end of one programme and the start of another.
+            // end of one programme and the start of another, a programme without captions being as
+            // silent as adverts. Without the logo, as programmes show it, a break can last up to
+            // LOGO_MAX_S: adverts and trailers fill eighteen and a half minutes between M6's evening
+            // news and its sitcom.
             const MIN_S = 150;
             const MAX_S = 800;
+            const LOGO_MAX_S = 1200;
             // A run of captions this long is programme; a run holds silences of up to CAPTION_GAP segments.
             const PROGRAMME_S = 60;
             const CAPTION_GAP = 3;
@@ -1261,7 +1265,7 @@
                 return held.filter(r => {
                     const length = (r[1] + 1 - r[0]) * step;
                     const between = programme(r[0] - AROUND, r[0]) && programme(r[1] + 1, r[1] + 1 + AROUND);
-                    return between && length >= MIN_S && length <= MAX_S;
+                    return between && length >= MIN_S && length <= LOGO_MAX_S;
                 });
             }
 
@@ -1271,7 +1275,7 @@
                 const out = [];
                 for (const r of held) {
                     const last = out[out.length - 1];
-                    if (last && (r[1] + 1 - last[0]) * step <= MAX_S && partedBy(last[1] + 1, r[0], trailer, brand)) last[1] = r[1];
+                    if (last && (r[1] + 1 - last[0]) * step <= LOGO_MAX_S && partedBy(last[1] + 1, r[0], trailer, brand)) last[1] = r[1];
                     else out.push([r[0], r[1]]);
                 }
                 return out;
@@ -1644,7 +1648,7 @@
                 return out;
             }
 
-            return { runs, captionBreaks, gone, solid, logoBreaks, combine, track, score, alone, seenIn, opens, markedBreaks, merge, BRIDGE, AROUND };
+            return { runs, captionBreaks, gone, solid, logoBreaks, combine, track, score, alone, seenIn, opens, markedBreaks, merge, BRIDGE, AROUND, LOGO_MAX_S };
         })();
         // </ad-rule>
 
@@ -1680,7 +1684,7 @@
             const AHEAD_S = 88;
             const MORE_S = 120;
             const MORE_TIMES = 4;
-            const FAR_S = 960;
+            const FAR_S = AdRule.LOGO_MAX_S + 160;
             const KEPT_S = 1200;
             const TRIES = 3;
             const MARKED_EVERY_MS = 30000;

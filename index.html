@@ -2114,34 +2114,39 @@
                 }
             }
 
-            // What each picture of a live channel has of its logo, read where it is not known yet.
-            async function readPictures(from, to) {
+            // What each picture of a live channel has of its logo, read where it is not known yet, for
+            // the stream mine: none is asked for once another plays, nor kept.
+            async function readPictures(from, to, mine) {
                 const wanted = [];
                 for (let time = from; time <= to; time += STEP_S) {
                     if (!scores.has(time) || (missed.has(time) && missed.get(time) < TRIES)) wanted.push(time);
                 }
                 if (wanted.length === 0) return;
-                const mine = logo;
+                const used = logo;
+                const url = thumbnailsUrl;
                 const got = await each(wanted, 4, async time => {
-                    const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
+                    if (mine !== playing) return null;
+                    const data = await pixels(url + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
                     if (data === null) return null;
                     const luma = lumaOf(data, PICTURE_WIDTH, 0);
-                    return [AdRule.score(mine, luma), mine.lower ? AdRule.score(mine.lower, luma) : null];
+                    return [AdRule.score(used, luma), used.lower ? AdRule.score(used.lower, luma) : null];
                 });
-                if (mine !== logo) return;
+                if (mine !== playing || used !== logo) return;
                 wanted.forEach((time, i) => {
                     // One that cannot be had counts as showing the logo, and is asked for again.
                     if (got[i] === null) missed.set(time, (missed.get(time) || 0) + 1);
                     else missed.delete(time);
-                    scores.set(time, got[i] === null ? mine.usual : got[i][0]);
-                    if (mine.lower) lowerScores.set(time, got[i] === null ? mine.lower.usual : got[i][1]);
+                    scores.set(time, got[i] === null ? used.usual : got[i][0]);
+                    if (used.lower) lowerScores.set(time, got[i] === null ? used.lower.usual : got[i][1]);
                 });
             }
 
-            // The pictures of times that can be had, as their luma row by row.
-            async function picturesAt(times) {
+            // The pictures of times that can be had, as their luma row by row, for the stream mine.
+            async function picturesAt(times, mine) {
+                const url = thumbnailsUrl;
                 return (await each(times, 4, async time => {
-                    const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
+                    if (mine !== playing) return null;
+                    const data = await pixels(url + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
                     return data === null ? null : lumaOf(data, PICTURE_WIDTH, 0);
                 })).filter(p => p !== null);
             }
@@ -2162,7 +2167,7 @@
                 missed = new Map();
                 const times = [];
                 for (let time = at - LEARN_SPAN_S; time <= Math.min(last, at + LEARN_SPAN_S); time += LEARN_EVERY_S) times.push(time);
-                const pictures = await picturesAt(times);
+                const pictures = await picturesAt(times, mine);
                 // Another stream was loaded meanwhile: what was learnt is not its logo.
                 if (mine !== playing) return;
                 const own = logoIn(pictures);
@@ -2201,7 +2206,7 @@
                     const end = at - LEARN_SPAN_S - back * 2 * LEARN_SPAN_S;
                     const times = [];
                     for (let time = end - 2 * LEARN_SPAN_S; time < end; time += LEARN_EVERY_S) times.push(time);
-                    const pictures = await picturesAt(times);
+                    const pictures = await picturesAt(times, mine);
                     // Older than the service keeps them: the further back are too.
                     if (mine !== playing || pictures.length === 0) return null;
                     const got = logoIn(pictures);
@@ -2237,7 +2242,7 @@
                 if (at > last) return;
                 if (Math.abs(at - learntAt) > LEARN_AGAIN_S) await learn(at, last, mine);
                 if (logo === null || mine !== playing) return;
-                await readPictures(at - BACK_S, Math.min(last, at + AHEAD_S));
+                await readPictures(at - BACK_S, Math.min(last, at + AHEAD_S), mine);
                 for (let more = 0; more < MORE_TIMES; more++) {
                     if (mine !== playing || !scores.has(at)) return;
                     const around = knownAround(at);
@@ -2249,8 +2254,8 @@
                         .concat(around.lowerGone ? AdRule.runs(AdRule.solid(around.lowerGone), AdRule.BRIDGE) : []);
                     const open = stretches.some(r => r[1] + AdRule.AROUND >= count && (count - r[0]) * STEP_S <= FAR_S);
                     const begun = stretches.some(r => r[0] < AdRule.AROUND && (r[1] + 1) * STEP_S <= FAR_S);
-                    if (open && until <= last) await readPictures(until, Math.min(last, until + MORE_S));
-                    else if (begun && around.first > at - FAR_S) await readPictures(around.first - MORE_S, around.first - STEP_S);
+                    if (open && until <= last) await readPictures(until, Math.min(last, until + MORE_S), mine);
+                    else if (begun && around.first > at - FAR_S) await readPictures(around.first - MORE_S, around.first - STEP_S, mine);
                     else break;
                 }
                 if (mine !== playing || logo === null || !scores.has(at)) return;

@@ -1256,7 +1256,7 @@
             // The stretches without the logo that have the programme on both sides and last what a
             // break does, as [first, last] pictures: held together by the bridge, and by a trailer or
             // a brand (see logoBreaks) where those are given.
-            function breakRuns(flags, step, trailer, brand) {
+            function breakRuns(flags, step, trailer, brand, lengthen) {
                 const firm = solid(flags);
                 const programme = (from, to) => {
                     if (from < 0 || to > firm.length) return false;
@@ -1264,12 +1264,23 @@
                     for (let i = from; i < to; i++) if (!firm[i]) with_++;
                     return with_ >= MOSTLY;
                 };
-                const held = trailer && brand ? joined(runs(firm, BRIDGE), trailer, brand, step) : runs(firm, BRIDGE);
-                return held.filter(r => {
+                const isBreak = r => {
                     const length = (r[1] + 1 - r[0]) * step;
-                    const between = programme(r[0] - AROUND, r[0]) && programme(r[1] + 1, r[1] + 1 + AROUND);
-                    return between && length >= MIN_S && length <= LOGO_MAX_S;
-                });
+                    return programme(r[0] - AROUND, r[0]) && programme(r[1] + 1, r[1] + 1 + AROUND) && length >= MIN_S && length <= LOGO_MAX_S;
+                };
+                const held = runs(firm, BRIDGE);
+                if (!trailer || !brand) return held.filter(isBreak);
+                // No short part to lengthen one with: it is never a break by itself either.
+                const joinable = lengthen ? held.filter(r => r[1] - r[0] + 1 >= END_PIECE) : held;
+                // Parts joined that are no break together are taken each by itself, as are those none of
+                // which is a break by itself where a join is only to lengthen one.
+                const out = [];
+                for (const r of joined(joinable, trailer, brand, step)) {
+                    const parts = joinable.filter(p => p[0] >= r[0] && p[1] <= r[1]);
+                    if (isBreak(r) && (!lengthen || parts.length === 1 || parts.some(isBreak))) out.push(r);
+                    else for (const p of parts) if (isBreak(p)) out.push([p[0], p[1]]);
+                }
+                return out;
             }
 
             // held with those parted only by a trailer or a brand, with up to BRIDGE other pictures,
@@ -1310,13 +1321,18 @@
             // SHORT_SHOW pictures in a row, the first gone the while (a trailer that carries the
             // channel's pictogram), does not part two pieces of a break; nor does the first seen at
             // most BRAND pictures in a row, the second gone the while (an advert with its brand in the
-            // first one's corner). And a stretch without the second logo that the first gave nothing
+            // first one's corner), and that from the first look on where another part is a break by
+            // itself and it is no shorter than an end piece (a new programme whose show's logo is not
+            // the one learnt looks like such a brand); parts so joined that are no break together are
+            // taken each by itself. And a stretch without the second logo that the first gave nothing
             // in is a break too when the first is gone through at least half of it and plainly there
             // on each side (adverts that keep it seen, as Gulli's toys), its short end pieces given up
             // as for the others: never past its return.
             function logoBreaks(flags, first, step, lowerFlags) {
                 let without = flags;
-                let found = breakRuns(without, step);
+                const brand = lowerFlags ? flags.map((f, i) => !f && lowerFlags[i]) : null;
+                const trailers = lowerFlags ? flags.map((f, i) => f && !lowerFlags[i]) : null;
+                let found = breakRuns(without, step, trailers, brand, true);
                 if (lowerFlags) {
                     without = new Array(flags.length).fill(false);
                     const trailer = new Array(flags.length).fill(false);
@@ -1326,7 +1342,6 @@
                             trailer[i] = flags[i] && !lowerFlags[i];
                         }
                     }
-                    const brand = flags.map((f, i) => !f && lowerFlags[i]);
                     found = breakRuns(without, step, trailer, brand);
                 }
                 const firm = solid(without);

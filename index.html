@@ -2171,16 +2171,18 @@
             }
 
             async function learn(at, last, mine) {
-                learntAt = at;
-                logo = null;
-                scores = new Map();
-                lowerScores = new Map();
-                missed = new Map();
                 const times = [];
                 for (let time = at - LEARN_SPAN_S; time <= Math.min(last, at + LEARN_SPAN_S); time += LEARN_EVERY_S) times.push(time);
+                // Nothing changes until the pictures are in, and the earlier ones looked at where needed.
                 const pictures = await picturesAt(times, mine);
                 // Another stream was loaded meanwhile: what was learnt is not its logo.
                 if (mine !== playing) return;
+                // None could be had, as when the connection is lost for a moment: what was learnt before
+                // stays, and the learn is tried again as when it finds nothing.
+                if (pictures.length === 0) {
+                    again(at);
+                    return;
+                }
                 const own = logoIn(pictures);
                 if (own !== null && own.channel) remembered.set(thumbnailsUrl, AdRule.alone(own));
                 // Where no logo stands out, as when most of the pictures are of adverts and trailers, the
@@ -2188,12 +2190,11 @@
                 // for in the earlier pictures, once a stream. One learnt over another programme can fit
                 // these pictures too poorly: the top left corner of M6's teleshopping holds its own logo.
                 let kept = null;
-                if (own === null && pictures.length > 0) {
+                if (own === null) {
                     const known = remembered.get(thumbnailsUrl);
                     if (known && AdRule.seenIn(known, pictures, KEPT_SEEN)) {
                         kept = known;
                     } else if (searchedFor !== thumbnailsUrl) {
-                        searchedFor = thumbnailsUrl;
                         const back = await earlier(at, mine);
                         if (mine !== playing) return;
                         if (back !== null) {
@@ -2202,7 +2203,11 @@
                         }
                     }
                 }
+                learntAt = at;
                 logo = kept || own;
+                scores = new Map();
+                lowerScores = new Map();
+                missed = new Map();
                 logoState = logo === null ? 'none in ' + pictures.length + ' pictures'
                     : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '') + (kept !== null ? ', kept' : '');
                 // Nothing learnt: tried again a little further on, then less and less often, as each try
@@ -2222,17 +2227,28 @@
             // middle of a long block of adverts and trailers, where its logo is faint and stands out
             // only where the programme fills most of the pictures. Null when it stands out in none.
             async function earlier(at, mine) {
+                let seen = null;
                 for (let back = 0; back < EARLIER_TIMES; back++) {
                     const end = at - LEARN_SPAN_S - back * 2 * LEARN_SPAN_S;
                     const times = [];
                     for (let time = end - 2 * LEARN_SPAN_S; time < end; time += LEARN_EVERY_S) times.push(time);
                     const pictures = await picturesAt(times, mine);
-                    // Older than the service keeps them: the further back are too.
-                    if (mine !== playing || pictures.length === 0) return null;
+                    if (mine !== playing) return null;
+                    // None of the nearest could be had, as when the connection is lost: looked for again at
+                    // the next learn. None further on: older than the service keeps them, as are those before.
+                    if (pictures.length === 0) {
+                        if (back === 0) return null;
+                        break;
+                    }
                     const got = logoIn(pictures);
-                    if (got !== null && got.channel) return AdRule.alone(got);
+                    if (got !== null && got.channel) {
+                        seen = AdRule.alone(got);
+                        break;
+                    }
                 }
-                return null;
+                // Only once searched to the end.
+                searchedFor = thumbnailsUrl;
+                return seen;
             }
 
             // The pictures read, without a gap, around at: the time of the first, and whether each

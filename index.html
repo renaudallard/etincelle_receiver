@@ -1750,11 +1750,11 @@
             let logo = null;
             let logoState = 'none';
             let learntAt = -Infinity;
-            // The channel's logo, the last found or looked for in its earlier pictures, for the pictures
-            // of channelOf: what a learn over pictures mostly of adverts and trailers falls back on.
-            let channelLogo = null;
-            let channelOf = null;
-            let searchedBack = false;
+            // The channel's logo last found, by the address of its pictures, for a channel played again
+            // while this page lives: what a learn over pictures mostly of adverts and trailers falls back
+            // on; and the channel whose earlier pictures were last searched for it, once a stream.
+            const remembered = new Map();
+            let searchedFor = null;
             let scores = new Map();
             // The same of the show's own logo, when one was learnt beside the channel's.
             let lowerScores = new Map();
@@ -2162,24 +2162,30 @@
                 const pictures = await picturesAt(times);
                 // Another stream was loaded meanwhile: what was learnt is not its logo.
                 if (mine !== playing) return;
-                if (channelOf !== thumbnailsUrl) {
-                    channelOf = thumbnailsUrl;
-                    channelLogo = null;
-                    searchedBack = false;
-                }
                 const own = logoIn(pictures);
-                if (own !== null && own.channel) channelLogo = AdRule.alone(own);
+                if (own !== null && own.channel) remembered.set(thumbnailsUrl, AdRule.alone(own));
                 // Where no logo stands out, as when most of the pictures are of adverts and trailers, the
-                // channel's from before, as long as it is still seen on enough of them.
-                if (own === null && pictures.length > 0 && channelLogo === null && !searchedBack) {
-                    searchedBack = true;
-                    channelLogo = await earlier(at, mine);
-                    if (mine !== playing) return;
+                // channel's from before, when seen on enough of them: the last found, or else one looked
+                // for in the earlier pictures, once a stream. One learnt over another programme can fit
+                // these pictures too poorly: the top left corner of M6's teleshopping holds its own logo.
+                let kept = null;
+                if (own === null && pictures.length > 0) {
+                    const known = remembered.get(thumbnailsUrl);
+                    if (known && AdRule.seenIn(known, pictures, KEPT_SEEN)) {
+                        kept = known;
+                    } else if (searchedFor !== thumbnailsUrl) {
+                        searchedFor = thumbnailsUrl;
+                        const back = await earlier(at, mine);
+                        if (mine !== playing) return;
+                        if (back !== null) {
+                            remembered.set(thumbnailsUrl, back);
+                            if (AdRule.seenIn(back, pictures, KEPT_SEEN)) kept = back;
+                        }
+                    }
                 }
-                const kept = own === null && channelLogo !== null && pictures.length > 0 && AdRule.seenIn(channelLogo, pictures, KEPT_SEEN);
-                logo = kept ? channelLogo : own;
+                logo = kept || own;
                 logoState = logo === null ? 'none in ' + pictures.length + ' pictures'
-                    : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '') + (kept ? ', kept' : '');
+                    : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '') + (kept !== null ? ', kept' : '');
                 if (logo === null) learntAt = at - LEARN_AGAIN_S + LEARN_RETRY_S;
             }
 

@@ -1734,6 +1734,8 @@
             // A recording has no more strips of thumbnails, nor caption segments.
             const MAX_STRIPS = 150;
             const MAX_SEGMENTS = 10000;
+            // A recording that could not be read is searched again after this long while it plays.
+            const RECORDING_RETRY_MS = 5 * 60 * 1000;
             // What is asked of the network and does not come is given up on after this long.
             const TIMEOUT_MS = 20000;
             // Pictures are read at half their size, which the logo survives.
@@ -2080,8 +2082,13 @@
                     recordedState = 'found ' + breaks.length + ' (captions ' + (captions === null ? 'none' : captions.length) +
                         ', logo ' + (logoBreaks === null ? 'none' : logoBreaks.length) + ')';
                 } catch (e) {
-                    // Not remembered: asked again the next time the recording is loaded.
-                    if (mine === playing) recordedState = 'error: ' + String(e && e.message).slice(0, 40);
+                    // Not remembered: asked again a while later while it plays, as the next time it is loaded.
+                    if (mine === playing) {
+                        recordedState = 'error: ' + String(e && e.message).slice(0, 40);
+                        setTimeout(() => {
+                            if (mine === playing && /^error/.test(recordedState)) wanted = { url, name, mine };
+                        }, RECORDING_RETRY_MS);
+                    }
                 }
             }
 

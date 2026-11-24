@@ -2293,7 +2293,9 @@
                     const stretches = AdRule.runs(AdRule.solid(around.gone), AdRule.BRIDGE)
                         .concat(around.lowerGone ? AdRule.runs(AdRule.solid(around.lowerGone), AdRule.BRIDGE) : []);
                     const open = stretches.some(r => r[1] + AdRule.AROUND >= count && (count - r[0]) * STEP_S <= FAR_S);
-                    const begun = stretches.some(r => r[0] < AdRule.AROUND && (r[1] + 1) * STEP_S <= FAR_S);
+                    // Back only for the break the playhead is in: one over before it has nothing to skip.
+                    const here = (at - around.first) / STEP_S;
+                    const begun = stretches.some(r => r[0] < AdRule.AROUND && r[1] >= here && (r[1] + 1) * STEP_S <= FAR_S);
                     if (open && until <= last) await readPictures(until, Math.min(last, until + MORE_S), mine);
                     else if (begun && around.first > at - FAR_S) await readPictures(around.first - MORE_S, around.first - STEP_S, mine);
                     else break;

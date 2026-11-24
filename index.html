@@ -2075,7 +2075,9 @@
                     const mpd = new DOMParser().parseFromString(await text(url), 'application/xml').documentElement;
                     const periods = mpd ? children(mpd, 'Period') : [];
                     const total = mpd ? seconds(mpd.getAttribute('mediaPresentationDuration')) : NaN;
-                    if (!mpd || mpd.getAttribute('type') === 'dynamic' || periods.length !== 1 || !(total > 0)) {
+                    // One still being made, of no length yet, is searched again once it is whole: what is found is kept.
+                    if (mpd && (mpd.getAttribute('type') === 'dynamic' || !(total > 0))) throw new Error('not whole yet');
+                    if (!mpd || periods.length !== 1) {
                         if (mine === playing) recordedState = 'not a recording';
                         return;
                     }

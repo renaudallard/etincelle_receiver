@@ -1760,6 +1760,8 @@
             let logo = null;
             let logoState = 'none';
             let learntAt = -Infinity;
+            // The learns in a row that found no logo.
+            let failures = 0;
             // The channel's logo last found, by the address of its pictures, for a channel played again
             // while this page lives: what a learn over pictures mostly of adverts and trailers falls back
             // on; and the channel whose earlier pictures were last searched for it, once a stream.
@@ -1811,6 +1813,7 @@
                     logo = null;
                     logoState = 'none';
                     learntAt = -Infinity;
+                    failures = 0;
                     searchedFor = null;
                     scores = new Map();
                     lowerScores = new Map();
@@ -2202,7 +2205,16 @@
                 logo = kept || own;
                 logoState = logo === null ? 'none in ' + pictures.length + ' pictures'
                     : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '') + (kept !== null ? ', kept' : '');
-                if (logo === null) learntAt = at - LEARN_AGAIN_S + LEARN_RETRY_S;
+                // Nothing learnt: tried again a little further on, then less and less often, as each try
+                // fetches all its pictures again.
+                if (logo === null) again(at);
+                else failures = 0;
+            }
+
+            // Nothing learnt at at: the next learn, further on as more fail in a row.
+            function again(at) {
+                learntAt = at - LEARN_AGAIN_S + Math.min(LEARN_AGAIN_S, LEARN_RETRY_S * 2 ** failures);
+                if (LEARN_RETRY_S * 2 ** failures < LEARN_AGAIN_S) failures++;
             }
 
             // The channel's logo as the pictures before those around at show it, forty minutes of them

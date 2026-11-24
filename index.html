@@ -1164,8 +1164,10 @@
             const SHOW_LED = 0.5;
             // The most pictures in a row the second logo may show in a break, the channel's being gone
             // with it, for them to be a trailer or a sponsor that carries it (Paris Première's
-            // pictogram) rather than the programme.
+            // pictogram) rather than the programme; and the most the channel's may be seen, the second
+            // gone the while, for them to be an advert with its brand in that corner (M6's faint logo).
             const SHORT_SHOW = 10;
+            const BRAND = 12;
             // The share of a picture a corner takes, of a corner's points that are the logo, and the
             // least a logo's edges must stand out.
             const CORNER = 0.22;
@@ -1245,9 +1247,9 @@
             }
 
             // The stretches without the logo that have the programme on both sides and last what a
-            // break does, as [first, last] pictures: held together by the bridge, and by a trailer
-            // (see logoBreaks) where one is given.
-            function breakRuns(flags, step, trailer) {
+            // break does, as [first, last] pictures: held together by the bridge, and by a trailer or
+            // a brand (see logoBreaks) where those are given.
+            function breakRuns(flags, step, trailer, brand) {
                 const firm = solid(flags);
                 const programme = (from, to) => {
                     if (from < 0 || to > firm.length) return false;
@@ -1255,7 +1257,7 @@
                     for (let i = from; i < to; i++) if (!firm[i]) with_++;
                     return with_ >= MOSTLY;
                 };
-                const held = trailer ? joined(runs(firm, BRIDGE), trailer) : runs(firm, BRIDGE);
+                const held = trailer && brand ? joined(runs(firm, BRIDGE), trailer, brand, step) : runs(firm, BRIDGE);
                 return held.filter(r => {
                     const length = (r[1] + 1 - r[0]) * step;
                     const between = programme(r[0] - AROUND, r[0]) && programme(r[1] + 1, r[1] + 1 + AROUND);
@@ -1263,23 +1265,25 @@
                 });
             }
 
-            // held with those parted only by a trailer, with up to BRIDGE other pictures, made one.
-            function joined(held, trailer) {
+            // held with those parted only by a trailer or a brand, with up to BRIDGE other pictures,
+            // made one, unless that one would be longer than a break may be.
+            function joined(held, trailer, brand, step) {
                 const out = [];
                 for (const r of held) {
                     const last = out[out.length - 1];
-                    if (last && partedBy(last[1] + 1, r[0], trailer)) last[1] = r[1];
+                    if (last && (r[1] + 1 - last[0]) * step <= MAX_S && partedBy(last[1] + 1, r[0], trailer, brand)) last[1] = r[1];
                     else out.push([r[0], r[1]]);
                 }
                 return out;
             }
 
-            // Whether the pictures from from below to hold a trailer, with up to BRIDGE other
-            // pictures, and no longer one.
-            function partedBy(from, to, trailer) {
+            // Whether the pictures from from below to hold a trailer or a brand, with up to BRIDGE
+            // other pictures, and no more of either.
+            function partedBy(from, to, trailer, brand) {
                 let known = 0;
-                for (let i = from; i < to; i++) if (trailer[i]) known++;
-                return to - from <= SHORT_SHOW + BRIDGE && known >= to - from - BRIDGE && longest(trailer, from, to) <= SHORT_SHOW;
+                for (let i = from; i < to; i++) if (trailer[i] || brand[i]) known++;
+                return to - from <= SHORT_SHOW + BRAND + BRIDGE && known >= to - from - BRIDGE &&
+                    longest(trailer, from, to) <= SHORT_SHOW && longest(brand, from, to) <= BRAND;
             }
 
             // The most flags in a row from from below to.
@@ -1297,10 +1301,11 @@
             // whether it is without that one: a break is then what is left of one once the pictures
             // that show the second logo are taken for the programme's. The second logo shown at most
             // SHORT_SHOW pictures in a row, the first gone the while (a trailer that carries the
-            // channel's pictogram), does not part two pieces of a break. And a stretch without the
-            // second logo that the first gave nothing in is a break too when the first is gone through
-            // at least half of it and plainly there on each side (adverts that keep it seen, as
-            // Gulli's toys), never past its return.
+            // channel's pictogram), does not part two pieces of a break; nor does the first seen at
+            // most BRAND pictures in a row, the second gone the while (an advert with its brand in the
+            // first one's corner). And a stretch without the second logo that the first gave nothing
+            // in is a break too when the first is gone through at least half of it and plainly there
+            // on each side (adverts that keep it seen, as Gulli's toys), never past its return.
             function logoBreaks(flags, first, step, lowerFlags) {
                 let without = flags;
                 let found = breakRuns(without, step);
@@ -1313,7 +1318,8 @@
                             trailer[i] = flags[i] && !lowerFlags[i];
                         }
                     }
-                    found = breakRuns(without, step, trailer);
+                    const brand = flags.map((f, i) => !f && lowerFlags[i]);
+                    found = breakRuns(without, step, trailer, brand);
                 }
                 const firm = solid(without);
                 const led = lowerFlags ? showLed(flags, lowerFlags, found, first, step) : [];

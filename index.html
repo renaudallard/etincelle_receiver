@@ -2112,7 +2112,8 @@
                         recordedState = 'error: ' + String(e && e.message).slice(0, 40);
                         setTimeout(() => {
                             if (mine === playing && /^error/.test(recordedState)) wanted = { url, name, mine };
-                        }, RECORDING_RETRY_MS * 2 ** recordingFails++);
+                        // No further apart than some two weeks: a timer reads its delay as 32 bits.
+                        }, RECORDING_RETRY_MS * 2 ** Math.min(recordingFails++, 12));
                     }
                 }
             }

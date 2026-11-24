@@ -1768,6 +1768,8 @@
             let recorded = [];
             let recordedState = 'none';
             let wanted = null;
+            // The searches of the recording loaded that failed, for each to wait twice as long as the one before.
+            let recordingFails = 0;
             const known = new Map();
             // A live channel's: marked by its manifest and found by its logo, in seconds since 1970.
             let marked = [];
@@ -1838,6 +1840,7 @@
                     missed = new Map();
                     // Once it plays (see tick): its start is not to be slowed by the search.
                     wanted = record ? { url: manifestUrl, name: key, mine: playing } : null;
+                    recordingFails = 0;
                 } catch (e) {
                     recordedState = 'error';
                 }
@@ -2101,12 +2104,13 @@
                     recordedState = 'found ' + breaks.length + ' (captions ' + (captions === null ? 'none' : captions.length) +
                         ', logo ' + (logoBreaks === null ? 'none' : logoBreaks.length) + ')';
                 } catch (e) {
-                    // Not remembered: asked again a while later while it plays, as the next time it is loaded.
+                    // Not remembered: asked again a while later while it plays, less and less often, as the
+                    // next time it is loaded.
                     if (mine === playing) {
                         recordedState = 'error: ' + String(e && e.message).slice(0, 40);
                         setTimeout(() => {
                             if (mine === playing && /^error/.test(recordedState)) wanted = { url, name, mine };
-                        }, RECORDING_RETRY_MS);
+                        }, RECORDING_RETRY_MS * 2 ** recordingFails++);
                     }
                 }
             }

@@ -1717,7 +1717,9 @@
             const MORE_S = 120;
             const MORE_TIMES = 4;
             const FAR_S = AdRule.LOGO_MAX_S + 160;
-            const KEPT_S = 1200;
+            // Older pictures are forgotten, no nearer than a read back may reach, or they would be
+            // read again at each look.
+            const KEPT_S = FAR_S + MORE_S;
             const TRIES = 3;
             const MARKED_EVERY_MS = 30000;
             const LOOK_EVERY_MS = 4000;

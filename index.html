@@ -1502,6 +1502,8 @@
                         strength: learnt.strength,
                         // A show's own logo, lower down, found beside this one, the channel's.
                         lower: learnt.lower ? logoOf(learnt.lower) : null,
+                        // In an upper corner: the channel's, which stays from one programme to the next.
+                        channel: learnt.corner < UPPER,
                     };
                 }
 
@@ -1528,6 +1530,19 @@
                         return logoBreaks(gone(learnt.score, learnt.usual, given), first, step, lowerFlags);
                     },
                 };
+            }
+
+            // logo without the show's own beside it, which changes with the programme.
+            function alone(logo) {
+                return logo.lower ? Object.assign({}, logo, { lower: null }) : logo;
+            }
+
+            // Whether pictures (luma row by row) show logo often enough, share of them at least, for
+            // it to be theirs still.
+            function seenIn(logo, pictures, share) {
+                let seen = 0;
+                for (const luma of pictures) if (score(logo, luma) >= GONE * logo.usual) seen++;
+                return seen >= share * pictures.length;
             }
 
             // How much of a logo the picture of luma has: about logo.usual with it, little without.
@@ -1629,7 +1644,7 @@
                 return out;
             }
 
-            return { runs, captionBreaks, gone, solid, logoBreaks, combine, track, score, opens, markedBreaks, merge, BRIDGE, AROUND };
+            return { runs, captionBreaks, gone, solid, logoBreaks, combine, track, score, alone, seenIn, opens, markedBreaks, merge, BRIDGE, AROUND };
         })();
         // </ad-rule>
 
@@ -1655,6 +1670,10 @@
             const LEARN_EVERY_S = 28;
             const LEARN_AGAIN_S = 900;
             const LEARN_RETRY_S = 120;
+            // Where no logo stands out, the channel's last one is taken when seen on this share of the
+            // pictures; with none, it is looked for this many times forty minutes back, once.
+            const KEPT_SEEN = 0.4;
+            const EARLIER_TIMES = 3;
             // Read around the playhead at all times, and more at a time while a stretch without the
             // logo goes on, for as far as a break may; older pictures are forgotten.
             const BACK_S = 64;
@@ -1695,6 +1714,11 @@
             let logo = null;
             let logoState = 'none';
             let learntAt = -Infinity;
+            // The channel's logo, the last found or looked for in its earlier pictures, for the pictures
+            // of channelOf: what a learn over pictures mostly of adverts and trailers falls back on.
+            let channelLogo = null;
+            let channelOf = null;
+            let searchedBack = false;
             let scores = new Map();
             // The same of the show's own logo, when one was learnt beside the channel's.
             let lowerScores = new Map();
@@ -2075,6 +2099,22 @@
                 });
             }
 
+            // The pictures of times that can be had, as their luma row by row.
+            async function picturesAt(times) {
+                return (await each(times, 4, async time => {
+                    const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
+                    return data === null ? null : lumaOf(data, PICTURE_WIDTH, 0);
+                })).filter(p => p !== null);
+            }
+
+            // The logo of pictures, null when none stands out.
+            function logoIn(pictures) {
+                if (pictures.length === 0) return null;
+                const track = AdRule.track(pictures.length, PICTURE_WIDTH, PICTURE_HEIGHT);
+                pictures.forEach((picture, i) => track.add(i, picture));
+                return track.logo();
+            }
+
             async function learn(at, last, mine) {
                 learntAt = at;
                 logo = null;
@@ -2083,18 +2123,46 @@
                 missed = new Map();
                 const times = [];
                 for (let time = at - LEARN_SPAN_S; time <= Math.min(last, at + LEARN_SPAN_S); time += LEARN_EVERY_S) times.push(time);
-                const pictures = (await each(times, 4, async time => {
-                    const data = await pixels(thumbnailsUrl + '/' + time, PICTURE_WIDTH, PICTURE_HEIGHT);
-                    return data === null ? null : lumaOf(data, PICTURE_WIDTH, 0);
-                })).filter(p => p !== null);
+                const pictures = await picturesAt(times);
                 // Another stream was loaded meanwhile: what was learnt is not its logo.
                 if (mine !== playing) return;
-                const track = AdRule.track(pictures.length, PICTURE_WIDTH, PICTURE_HEIGHT);
-                pictures.forEach((picture, i) => track.add(i, picture));
-                logo = pictures.length > 0 ? track.logo() : null;
+                if (channelOf !== thumbnailsUrl) {
+                    channelOf = thumbnailsUrl;
+                    channelLogo = null;
+                    searchedBack = false;
+                }
+                const own = logoIn(pictures);
+                if (own !== null && own.channel) channelLogo = AdRule.alone(own);
+                // Where no logo stands out, as when most of the pictures are of adverts and trailers, the
+                // channel's from before, as long as it is still seen on enough of them.
+                if (own === null && pictures.length > 0 && channelLogo === null && !searchedBack) {
+                    searchedBack = true;
+                    channelLogo = await earlier(at, mine);
+                    if (mine !== playing) return;
+                }
+                const kept = own === null && channelLogo !== null && pictures.length > 0 && AdRule.seenIn(channelLogo, pictures, KEPT_SEEN);
+                logo = kept ? channelLogo : own;
                 logoState = logo === null ? 'none in ' + pictures.length + ' pictures'
-                    : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '');
+                    : 'strength ' + Math.round(logo.strength) + (logo.lower ? ', lower one ' + Math.round(logo.lower.strength) : '') + (kept ? ', kept' : '');
                 if (logo === null) learntAt = at - LEARN_AGAIN_S + LEARN_RETRY_S;
+            }
+
+            // The channel's logo as the pictures before those around at show it, forty minutes of them
+            // at a time, the nearest first, up to EARLIER_TIMES of them: for a channel opened in the
+            // middle of a long block of adverts and trailers, where its logo is faint and stands out
+            // only where the programme fills most of the pictures. Null when it stands out in none.
+            async function earlier(at, mine) {
+                for (let back = 0; back < EARLIER_TIMES; back++) {
+                    const end = at - LEARN_SPAN_S - back * 2 * LEARN_SPAN_S;
+                    const times = [];
+                    for (let time = end - 2 * LEARN_SPAN_S; time < end; time += LEARN_EVERY_S) times.push(time);
+                    const pictures = await picturesAt(times);
+                    // Older than the service keeps them: the further back are too.
+                    if (mine !== playing || pictures.length === 0) return null;
+                    const got = logoIn(pictures);
+                    if (got !== null && got.channel) return AdRule.alone(got);
+                }
+                return null;
             }
 
             // The pictures read, without a gap, around at: the time of the first, and whether each

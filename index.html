@@ -1172,11 +1172,14 @@
             // gone the while, for them to be an advert with its brand in that corner (M6's faint logo).
             const SHORT_SHOW = 10;
             const BRAND = 12;
-            // The share of a picture a corner takes, of a corner's points that are the logo, and the
-            // least a logo's edges must stand out.
+            // The share of a picture a corner takes, of a corner's points that are the logo, the least
+            // a logo's edges must stand out, and those of a show's own beside the channel's: a fainter
+            // one, as a band of text along the bottom, is matched by the notices along the bottom of
+            // adverts, which then pass for the programme and part the break.
             const CORNER = 0.22;
             const MASK = 0.92;
             const STRONG = 25;
+            const BESIDE = 30;
             // How many of the corners, the first ones, are the upper ones.
             const UPPER = 2;
             // Marked breaks this close are one; and the shape of a break on a stream that marks
@@ -1484,13 +1487,14 @@
                     if (size <= 0 || read.length < 2 * AROUND) return null;
                     const counts = new Int32Array(256);
                     const strong = one => one !== null && one.strength >= STRONG ? one : null;
+                    const beside = one => one !== null && one.strength >= BESIDE ? one : null;
                     const lower = strongest(UPPER, edges.length, read, counts);
                     const upper = found < 0 ? strong(strongest(0, UPPER, read, counts)) : found < UPPER ? cornerOf(found, read, counts) : null;
                     const kept = upper !== null ? upper : found < 0 ? strong(lower) : cornerOf(found, read, counts);
                     if (kept === null) return null;
                     found = kept.corner;
                     scored(kept, read);
-                    kept.lower = upper !== null && strong(lower) !== null ? scored(lower, read) : null;
+                    kept.lower = upper !== null && beside(lower) !== null ? scored(lower, read) : null;
                     return kept;
                 }
 

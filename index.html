@@ -1312,7 +1312,8 @@
             // most BRAND pictures in a row, the second gone the while (an advert with its brand in the
             // first one's corner). And a stretch without the second logo that the first gave nothing
             // in is a break too when the first is gone through at least half of it and plainly there
-            // on each side (adverts that keep it seen, as Gulli's toys), never past its return.
+            // on each side (adverts that keep it seen, as Gulli's toys), its short end pieces given up
+            // as for the others: never past its return.
             function logoBreaks(flags, first, step, lowerFlags) {
                 let without = flags;
                 let found = breakRuns(without, step);
@@ -1338,13 +1339,19 @@
                     // what parts them is an advert's brand in the channel's corner, or the show's logo
                     // matched for a picture now and then by the notices along the bottom of adverts.
                     const raw = runs(firm.slice(r[0], r[1] + 1), 0);
-                    const pieces = lowerFlags ? merged(raw, r[0], flags, lowerFlags) : raw;
-                    let from = 0;
-                    let to = pieces.length - 1;
-                    while (to > from && pieces[to][1] - pieces[to][0] + 1 < END_PIECE) to--;
-                    while (from < to && pieces[from][1] - pieces[from][0] + 1 < END_PIECE) from++;
-                    return [first + (r[0] + pieces[from][0]) * step, first + (r[0] + pieces[to][1] + 1) * step];
+                    const span = trimmed(lowerFlags ? merged(raw, r[0], flags, lowerFlags) : raw);
+                    return [first + (r[0] + span[0]) * step, first + (r[0] + span[1] + 1) * step];
                 }).concat(led);
+            }
+
+            // From the first picture of held, the pieces of a break, to the last, once a short piece at
+            // either end is given up (see logoBreaks); of short pieces only, the first is kept.
+            function trimmed(held) {
+                let from = 0;
+                let to = held.length - 1;
+                while (to > from && held[to][1] - held[to][0] + 1 < END_PIECE) to--;
+                while (from < to && held[from][1] - held[from][0] + 1 < END_PIECE) from++;
+                return [held[from][0], held[to][1]];
             }
 
             // pieces of a break whose first picture is offset, made one where nothing between them
@@ -1394,7 +1401,8 @@
                         to = i + 1;
                     }
                     if (from < 0 || (to - from) * step < MIN_S || !clear(from - AROUND, from) || !clear(to, to + AROUND)) continue;
-                    out.push([first + from * step, first + to * step]);
+                    const span = trimmed(merged(runs(firm.slice(r[0], r[1] + 1), 0), r[0], flags, lowerFlags));
+                    out.push([first + (r[0] + span[0]) * step, first + (r[0] + span[1] + 1) * step]);
                 }
                 return out;
             }

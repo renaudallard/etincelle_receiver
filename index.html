@@ -1333,14 +1333,42 @@
                 return found.map(r => {
                     // A short piece held to either end by the bridge is given up: the logo hidden for
                     // a moment just after a break, or before one, is a bright scene of the programme
-                    // more often than a last advert, and the break would run into it.
-                    const pieces = runs(firm.slice(r[0], r[1] + 1), 0);
+                    // more often than a last advert, and the break would run into it. With a second
+                    // logo, pieces with nothing between them that looks like the programme are one:
+                    // what parts them is an advert's brand in the channel's corner, or the show's logo
+                    // matched for a picture now and then by the notices along the bottom of adverts.
+                    const raw = runs(firm.slice(r[0], r[1] + 1), 0);
+                    const pieces = lowerFlags ? merged(raw, r[0], flags, lowerFlags) : raw;
                     let from = 0;
                     let to = pieces.length - 1;
                     while (to > from && pieces[to][1] - pieces[to][0] + 1 < END_PIECE) to--;
                     while (from < to && pieces[from][1] - pieces[from][0] + 1 < END_PIECE) from++;
                     return [first + (r[0] + pieces[from][0]) * step, first + (r[0] + pieces[to][1] + 1) * step];
                 }).concat(led);
+            }
+
+            // pieces of a break whose first picture is offset, made one where nothing between them
+            // looks like the programme (see programmeIn).
+            function merged(pieces, offset, flags, lowerFlags) {
+                const out = [];
+                for (const p of pieces) {
+                    const last = out[out.length - 1];
+                    if (last && !programmeIn(offset + last[1] + 1, offset + p[0], flags, lowerFlags)) last[1] = p[1];
+                    else out.push([p[0], p[1]]);
+                }
+                return out;
+            }
+
+            // Whether the pictures from from below to look like the programme: one with both logos
+            // seen, or the show's seen SOLID pictures in a row.
+            function programmeIn(from, to, flags, lowerFlags) {
+                let row = 0;
+                for (let i = from; i < to; i++) {
+                    if (!flags[i] && !lowerFlags[i]) return true;
+                    row = lowerFlags[i] ? 0 : row + 1;
+                    if (row >= SOLID) return true;
+                }
+                return false;
             }
 
             // The breaks a stretch without the second logo gives where found has none (see logoBreaks).

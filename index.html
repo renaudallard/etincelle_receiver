@@ -1157,6 +1157,11 @@
             // The pictures a piece at either end of a break must last to stay part of it when only
             // the bridge holds it there.
             const END_PIECE = 10;
+            // Of the AROUND pictures on each side of a stretch without the show's logo, how many at
+            // least must have the channel's for it to be a break the channel's alone did not give, and
+            // the share of the stretch that must be without the channel's too.
+            const CLEAR = 12;
+            const SHOW_LED = 0.5;
             // The share of a picture a corner takes, of a corner's points that are the logo, and the
             // least a logo's edges must stand out.
             const CORNER = 0.22;
@@ -1254,7 +1259,10 @@
 
             // Those stretches as [start, end]. With a second logo, lowerFlags tells of each picture
             // whether it is without that one: a break is then what is left of one once the pictures
-            // that show the second logo are taken for the programme's.
+            // that show the second logo are taken for the programme's. And a stretch without the
+            // second logo that the first gave nothing in is a break too when the first is gone through
+            // at least half of it and plainly there on each side (adverts that keep it seen, as
+            // Gulli's toys), never past its return.
             function logoBreaks(flags, first, step, lowerFlags) {
                 let without = flags;
                 let found = breakRuns(without, step);
@@ -1264,6 +1272,7 @@
                     found = breakRuns(without, step);
                 }
                 const firm = solid(without);
+                const led = lowerFlags ? showLed(flags, lowerFlags, found, first, step) : [];
                 return found.map(r => {
                     // A short piece held to either end by the bridge is given up: the logo hidden for
                     // a moment just after a break, or before one, is a bright scene of the programme
@@ -1274,7 +1283,35 @@
                     while (to > from && pieces[to][1] - pieces[to][0] + 1 < END_PIECE) to--;
                     while (from < to && pieces[from][1] - pieces[from][0] + 1 < END_PIECE) from++;
                     return [first + (r[0] + pieces[from][0]) * step, first + (r[0] + pieces[to][1] + 1) * step];
-                });
+                }).concat(led);
+            }
+
+            // The breaks a stretch without the second logo gives where found has none (see logoBreaks).
+            function showLed(flags, lowerFlags, found, first, step) {
+                const firm = solid(flags);
+                const clear = (from, to) => {
+                    if (from < 0 || to > firm.length) return false;
+                    let with_ = 0;
+                    for (let i = from; i < to; i++) if (!firm[i]) with_++;
+                    return with_ >= CLEAR;
+                };
+                const out = [];
+                for (const r of breakRuns(lowerFlags, step)) {
+                    if (found.some(f => f[0] <= r[1] && r[0] <= f[1])) continue;
+                    let without = 0;
+                    for (let i = r[0]; i <= r[1]; i++) if (flags[i]) without++;
+                    if (without < SHOW_LED * (r[1] - r[0] + 1)) continue;
+                    let from = -1;
+                    let to = -1;
+                    for (let i = r[0]; i <= r[1]; i++) {
+                        if (!firm[i]) continue;
+                        if (from < 0) from = i;
+                        to = i + 1;
+                    }
+                    if (from < 0 || (to - from) * step < MIN_S || !clear(from - AROUND, from) || !clear(to, to + AROUND)) continue;
+                    out.push([first + from * step, first + to * step]);
+                }
+                return out;
             }
 
             // What captions and logo agree on; either is null when it had nothing to go by.
@@ -2043,7 +2080,10 @@
                     const around = knownAround(at);
                     const count = around.gone.length;
                     const until = around.first + count * STEP_S;
-                    const stretches = AdRule.runs(AdRule.solid(around.gone), AdRule.BRIDGE);
+                    // The show's logo is followed too: adverts can keep the channel's seen through half a
+                    // break (see AdRule.logoBreaks), which the show's alone then gives.
+                    const stretches = AdRule.runs(AdRule.solid(around.gone), AdRule.BRIDGE)
+                        .concat(around.lowerGone ? AdRule.runs(AdRule.solid(around.lowerGone), AdRule.BRIDGE) : []);
                     const open = stretches.some(r => r[1] + AdRule.AROUND >= count && (count - r[0]) * STEP_S <= FAR_S);
                     const begun = stretches.some(r => r[0] < AdRule.AROUND && (r[1] + 1) * STEP_S <= FAR_S);
                     if (open && until <= last) await readPictures(until, Math.min(last, until + MORE_S));

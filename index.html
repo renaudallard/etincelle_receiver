@@ -1991,7 +1991,8 @@
                     // Another stream was loaded meanwhile: nothing more is asked for this one.
                     if (mine !== playing) return true;
                     try {
-                        const body = await text(segment.url);
+                        // Asked twice: one that fails for a moment would have the whole search made again.
+                        const body = await text(segment.url).catch(() => text(segment.url));
                         let m;
                         paragraph.lastIndex = 0;
                         while ((m = paragraph.exec(body)) !== null) {
@@ -2019,7 +2020,9 @@
                 const give = async wanted => {
                     const read = await each(wanted, 1, async i => {
                         if (mine !== playing) return false;
-                        const data = await pixels(strips[i].url, across * PICTURE_WIDTH, PICTURE_HEIGHT);
+                        // Asked twice, as the captions.
+                        let data = await pixels(strips[i].url, across * PICTURE_WIDTH, PICTURE_HEIGHT);
+                        if (data === null && mine === playing) data = await pixels(strips[i].url, across * PICTURE_WIDTH, PICTURE_HEIGHT);
                         if (data === null) return false;
                         for (let k = 0; k < perStrip; k++) {
                             track.add(i * perStrip + k, lumaOf(data, across * PICTURE_WIDTH, k * PICTURE_WIDTH));

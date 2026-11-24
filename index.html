@@ -2276,7 +2276,11 @@
                 const at = Math.floor(atSeconds / STEP_S) * STEP_S;
                 const last = Math.floor((liveAt - NOT_YET_S) / STEP_S) * STEP_S;
                 if (at > last) return;
-                if (Math.abs(at - learntAt) > LEARN_AGAIN_S) await learn(at, last, mine);
+                // Not learnt again in a break: all that is known of it would be read again with the new
+                // logo, and the break be lost the while. Once out of it, as late as a break may last.
+                const since = Math.abs(at - learntAt);
+                const held = found.some(b => b[0] <= at && at <= b[1]) && since <= LEARN_AGAIN_S + AdRule.LOGO_MAX_S;
+                if (since > LEARN_AGAIN_S && !held) await learn(at, last, mine);
                 if (logo === null || mine !== playing) return;
                 await readPictures(at - BACK_S, Math.min(last, at + AHEAD_S), mine);
                 for (let more = 0; more < MORE_TIMES; more++) {

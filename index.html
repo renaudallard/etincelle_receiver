@@ -2699,6 +2699,8 @@
         // </ad-skip>
 
         const skipPill = document.getElementById('skip-pill');
+        // Whether a skip was offered at the last look, for the senders to be told when that changes.
+        let skipOffered = false;
         const adSkip = makeAdSkip({
             isLive: () => streamIsLive,
             joining: () => liveJoinPending,
@@ -2715,6 +2717,16 @@
             show: on => {
                 const visible = !!skipPill && on && !menuVisible && !trackMenuVisible;
                 if (skipPill) skipPill.classList.toggle('visible', visible);
+                // A status goes out on player events only: the senders are told when a break begins or
+                // ends, for one that offers the skip too (see report).
+                if (on !== skipOffered) {
+                    skipOffered = on;
+                    try {
+                        playerManager.broadcastStatus(false);
+                    } catch (e) {
+                        // The status follows with the next player event.
+                    }
+                }
                 return visible;
             },
             seek: media => {

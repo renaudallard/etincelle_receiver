@@ -39,7 +39,13 @@ the native Molotov streamer is unavailable.
   programme: the last adverts are left in), looked
   for in the pictures the service keeps of each channel (their address comes in
   the `customData` as `live_thumbnails_url`; without it only marked breaks are
-  found); and in a recording (what the sender says is one, with `recording` in
+  found); on the channels the sender flags with `separated_breaks` in the
+  `customData` (those that put half a second of black between two adverts: M6,
+  Gulli and a few others), from those blacks, which the size of the frames in
+  the headers of the video segments gives away (a break runs from its second
+  black to the one before its last, also across a card with a single black in a
+  long break, and a logo guess that runs into it goes on to its end); and in a
+  recording (what the sender says is one, with `recording` in
   the `customData`), from its thumbnail strips the same way and from its
   captions, once it plays, and again five minutes later if the network cut
   that short. Nothing is skipped unasked, and nothing is offered at

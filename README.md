@@ -42,7 +42,8 @@ the native Molotov streamer is unavailable.
   found); on the channels the sender flags with `separated_breaks` in the
   `customData` (those that put half a second of black between two adverts: M6,
   Gulli and a few others), from those blacks, which the size of the frames in
-  the headers of the video segments gives away (a break runs from its second
+  the headers of the video segments gives away, read in three renditions (270,
+  540 and 1080 lines), each with its own limits (a break runs from its second
   black to the one before its last, also across a card with a single black in a
   long break, and a logo guess that runs into it goes on to its end); and in a
   recording (what the sender says is one, with `recording` in

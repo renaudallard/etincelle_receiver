@@ -49,7 +49,10 @@ the native Molotov streamer is unavailable.
   to read part of a segment as a Chromecast's does, from the whole segments of
   the 270 line one, some 135 MB an hour (a break runs from its second
   black to the one before its last, also across a card with a single black in a
-  long break, and a logo guess that runs into it goes on to its end); and in a
+  long break, and a logo guess that runs into it goes on to its end; once
+  such blacks are known, a logo guess is offered from the first of them, and the
+  pill in a break by the blacks goes as far as the logo guess around it when
+  that ends later); and in a
   recording (what the sender says is one, with `recording` in
   the `customData`), from its thumbnail strips the same way and from its
   captions, once it plays, and again five minutes later if the network cut

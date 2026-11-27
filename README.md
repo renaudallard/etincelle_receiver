@@ -52,7 +52,8 @@ the native Molotov streamer is unavailable.
   the `customData`), from its thumbnail strips the same way and from its
   captions, once it plays, and again five minutes later if the network cut
   that short. Nothing is skipped unasked, and nothing is offered at
-  the live point. The status carries what the search is at as `customData.ad_skip`, with
+  the live point; the blacks are read up to a second before it, but never in
+  the stream's newest 8 seconds. The status carries what the search is at as `customData.ad_skip`, with
   no address in it.
 - **Live rewind hand-off** — when a live show is cast after rewinding into its
   time-shift window, the receiver reads `live_rewind_sec` from the `customData` and

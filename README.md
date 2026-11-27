@@ -51,7 +51,11 @@ the native Molotov streamer is unavailable.
   recording (what the sender says is one, with `recording` in
   the `customData`), from its thumbnail strips the same way and from its
   captions, once it plays, and again five minutes later if the network cut
-  that short. Nothing is skipped unasked, and nothing is offered at
+  that short, then from the blacks between its adverts, read only about the
+  breaks those give (in the 270 and 540 line renditions, or the whole 270 line
+  segments where part of one cannot be read): a break they give counts only
+  within one of those, and ends at its last black but one. Nothing is skipped
+  unasked, and nothing is offered at
   the live point; the blacks are read up to a second before it, but never in
   the stream's newest 8 seconds. The status carries what the search is at as `customData.ad_skip`, with
   no address in it.

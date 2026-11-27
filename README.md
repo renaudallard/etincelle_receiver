@@ -29,7 +29,9 @@ the native Molotov streamer is unavailable.
 - **Skip ads** — while playback is in an ad break whose end is known, a
   "Passer la pub : OK" pill is shown and **OK** jumps to the break's end. The
   receiver finds the breaks itself, with the rules of the etincelle apps: what a
-  live stream marks (SCTE-35 in its manifest, or the shape of its periods), read
+  live stream marks (SCTE-35 in its manifest, or the shape of its periods: a
+  jingle between two stretches of adverts, or, on a stream that shows that
+  shape, one stretch of one to seven minutes between two longer ones), read
   from the manifest every half minute; what it does not mark, from the logo that
   sits in a corner through the programme (the channel's, in an upper corner,
   before a show's own lower down, though a picture with the show's, when it
